@@ -187,7 +187,9 @@ async def process_input(
         input_type = "text"
         input_text = ""
 
-        if input_method == "Завантаження файлу" and file_input:
+        if input_method == "Завантаження файлу":
+            if not file_input:
+                return "❌ Помилка: Будь ласка, завантажте файл", None, session_id
             try:
                 with open(file_input.name, 'r', encoding='utf-8') as file:
                     input_text = file.read()
@@ -197,11 +199,15 @@ async def process_input(
         elif input_method == "URL посилання":
             input_type = "url"
             input_text = url_input
+            if not input_text or not input_text.strip():
+                return "❌ Помилка: Будь ласка, введіть URL посилання на судове рішення", None, session_id
         else:
             input_text = text_input
+            if not input_text or not input_text.strip():
+                return "❌ Помилка: Будь ласка, введіть текст судового рішення", None, session_id
 
         if not input_text:
-            return "Помилка: Текст не може бути порожнім", None, session_id
+            return "❌ Помилка: Текст не може бути порожнім", None, session_id
 
         # Get custom prompts from session
         manager = get_session_manager()
@@ -253,7 +259,9 @@ async def process_raw_text_search(text, url, file, method, state_lp_json):
     """Process raw text search and update necessary states."""
     try:
         input_text = ""
-        if method == "Завантаження файлу" and file:
+        if method == "Завантаження файлу":
+            if not file:
+                return "❌ Помилка: Будь ласка, завантажте файл", None, state_lp_json
             try:
                 with open(file.name, 'r', encoding='utf-8') as f:
                     input_text = f.read()
@@ -262,11 +270,15 @@ async def process_raw_text_search(text, url, file, method, state_lp_json):
                     input_text = f.read()
         elif method == "URL посилання":
             input_text = url
+            if not input_text or not input_text.strip():
+                return "❌ Помилка: Будь ласка, введіть URL посилання на судове рішення", None, state_lp_json
         else:
             input_text = text
+            if not input_text or not input_text.strip():
+                return "❌ Помилка: Будь ласка, введіть текст судового рішення", None, state_lp_json
 
         if not input_text:
-            return "Помилка: Порожній текст", None, state_lp_json
+            return "❌ Помилка: Порожній текст", None, state_lp_json
 
         input_text = clean_text(input_text)
 
