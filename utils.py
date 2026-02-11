@@ -141,3 +141,45 @@ def get_links_html_lp(lp_ids: Union[str, int, None]) -> str:
     links = [f"[ПП ВС: {lp_id}](https://lpd.court.gov.ua/home/search/{lp_id})"
              for lp_id in parsed_ids]
     return ", ".join(links)
+
+def extract_json_from_text(text: str) -> Optional[Dict]:
+    """Extract and parse JSON from text, handling markdown blocks and other noise."""
+    if not text:
+        return None
+    
+    try:
+        # 1. Try direct parsing
+        return json.loads(text.strip())
+    except json.JSONDecodeError:
+        pass
+    
+    # 2. Try to find JSON within markdown or other text
+    text_to_parse = text.strip()
+    
+    # Remove markdown code blocks
+    if "```json" in text_to_parse:
+        parts = text_to_parse.split("```json")
+        if len(parts) > 1:
+            text_to_parse = parts[1].split("```")[0].strip()
+    elif "```" in text_to_parse:
+        parts = text_to_parse.split("```")
+        if len(parts) > 1:
+            text_to_parse = parts[1].strip()
+    
+    try:
+        return json.loads(text_to_parse)
+    except json.JSONDecodeError:
+        pass
+    
+    # 3. Last resort: find the first { and last }
+    start_idx = text_to_parse.find('{')
+    end_idx = text_to_parse.rfind('}')
+    
+    if start_idx != -1 and end_idx != -1:
+        text_to_parse = text_to_parse[start_idx:end_idx + 1]
+        try:
+            return json.loads(text_to_parse)
+        except json.JSONDecodeError:
+            pass
+            
+    return None

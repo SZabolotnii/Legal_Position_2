@@ -44,7 +44,8 @@ from utils import (
     clean_text,
     extract_court_decision_text,
     get_links_html,
-    get_links_html_lp
+    get_links_html_lp,
+    extract_json_from_text
 )
 from embeddings import GeminiEmbedding
 
@@ -300,12 +301,16 @@ class LLMAnalyzer:
                 response_format=response_format,
                 temperature=0
             )
-            return response.choices[0].message.content
+            response_text = response.choices[0].message.content
+            
+            # Verify it's valid JSON
+            json_data = extract_json_from_text(response_text)
+            return json.dumps(json_data, ensure_ascii=False) if json_data else response_text
         except Exception as e:
             raise RuntimeError(f"Error in OpenAI analysis: {str(e)}")
 
     async def _analyze_with_deepseek(self, prompt: str) -> str:
-        """Analyze text using OpenAI."""
+        """Analyze text using DeepSeek."""
         messages = [
             ChatMessage(role="system", content=SYSTEM_PROMPT),
             ChatMessage(role="user", content=prompt)
@@ -322,7 +327,11 @@ class LLMAnalyzer:
                 response_format=response_format,
                 temperature=0
             )
-            return response.choices[0].message.content
+            response_text = response.choices[0].message.content
+            
+            # Verify and clean JSON
+            json_data = extract_json_from_text(response_text)
+            return json.dumps(json_data, ensure_ascii=False) if json_data else response_text
         except Exception as e:
             raise RuntimeError(f"Error in DeepSeek analysis: {str(e)}")
 
@@ -335,7 +344,13 @@ class LLMAnalyzer:
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}]
             )
-            return response.content[0].text
+            response_text = response.content[0].text
+            
+            # Extract JSON from potential markdown blocks
+            json_data = extract_json_from_text(response_text)
+            if json_data:
+                return json.dumps(json_data, ensure_ascii=False)
+            return response_text
         except Exception as e:
             raise RuntimeError(f"Error in Anthropic analysis: {str(e)}")
 
@@ -386,48 +401,29 @@ class LLMAnalyzer:
             if not response_text:
                 raise RuntimeError("Empty response from Gemini")
 
-            # Витягуємо JSON з відповіді
-            text = response_text.strip()
-            # Знаходимо перший { і останній }
-            start = text.find('{')
-            end = text.rfind('}') + 1
-
-            if start == -1 or end == 0:
+            # Витягуємо JSON з відповіді за допомогою універсальної функції
+            json_data = extract_json_from_text(response_text)
+            
+            if json_data:
+                if "relevant_positions" not in json_data:
+                    json_data = {
+                        "relevant_positions": [
+                            {
+                                "lp_id": "unknown",
+                                "source_index": "1",
+                                "description": json.dumps(json_data, ensure_ascii=False)
+                            }
+                        ]
+                    }
+                return json.dumps(json_data, ensure_ascii=False)
+            else:
                 # Якщо JSON не знайдено, створюємо структурований JSON з тексту
                 return json.dumps({
                     "relevant_positions": [
                         {
                             "lp_id": "unknown",
                             "source_index": "1",
-                            "description": text
-                        }
-                    ]
-                }, ensure_ascii=False)
-
-            json_str = text[start:end]
-
-            # Перевіряємо, чи є це валідним JSON
-            try:
-                parsed_json = json.loads(json_str)
-                if "relevant_positions" not in parsed_json:
-                    parsed_json = {
-                        "relevant_positions": [
-                            {
-                                "lp_id": "unknown",
-                                "source_index": "1",
-                                "description": json.dumps(parsed_json)
-                            }
-                        ]
-                    }
-                return json.dumps(parsed_json, ensure_ascii=False)
-            except json.JSONDecodeError:
-                # Якщо не вдалося розпарсити JSON, повертаємо весь текст як опис
-                return json.dumps({
-                    "relevant_positions": [
-                        {
-                            "lp_id": "unknown",
-                            "source_index": "1",
-                            "description": text
+                            "description": response_text
                         }
                     ]
                 }, ensure_ascii=False)
@@ -614,28 +610,56 @@ def generate_legal_position(
                 ChatMessage(role="system", content=system_prompt),
                 ChatMessage(role="user", content=content),
             ]
-            response = llm.chat(messages, response_format=LEGAL_POSITION_SCHEMA)
-            return json.loads(response.message.content)
+            
+            try:
+                response = llm.chat(messages, response_format=LEGAL_POSITION_SCHEMA)
+                response_text = response.message.content
+                
+                json_response = extract_json_from_text(response_text)
+                if json_response and all(key in json_response for key in ["title", "text", "proceeding", "category"]):
+                    return json_response
+                else:
+                    raise ValueError(f"Invalid JSON structure from OpenAI: {response_text[:200]}...")
+            except Exception as e:
+                print(f"[ERROR] OpenAI generation/parsing failed: {e}")
+                return {
+                    "title": "Автоматично сформований заголовок (OpenAI)",
+                    "text": content[:500] if not 'response_text' in locals() else response_text,
+                    "proceeding": "Не визначено",
+                    "category": "Помилка парсингу"
+                }
 
         if provider == ModelProvider.DEEPSEEK.value:
             client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": content},
-                ],
-                temperature=GENERATION_TEMPERATURE,
-                max_tokens=MAX_TOKENS_CONFIG["deepseek"],
-                response_format={
-                    'type': 'json_object'
-                },
-                stream=False
-            )
             try:
-                return json.loads(response.choices[0].message.content)
-            except json.JSONDecodeError:
-                raise Exception("Помилка при парсингу відповіді від моделі Deepseek")
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": content},
+                    ],
+                    temperature=GENERATION_TEMPERATURE,
+                    max_tokens=MAX_TOKENS_CONFIG["deepseek"],
+                    response_format={
+                        'type': 'json_object'
+                    },
+                    stream=False
+                )
+                response_text = response.choices[0].message.content
+                
+                json_response = extract_json_from_text(response_text)
+                if json_response and all(key in json_response for key in ["title", "text", "proceeding", "category"]):
+                    return json_response
+                else:
+                    raise ValueError(f"Invalid JSON structure from DeepSeek: {response_text[:200]}...")
+            except Exception as e:
+                print(f"[ERROR] DeepSeek generation/parsing failed: {e}")
+                return {
+                    "title": "Автоматично сформований заголовок (DeepSeek)",
+                    "text": "Помилка при отриманні відповіді від DeepSeek",
+                    "proceeding": "Не визначено",
+                    "category": "Помилка API/Парсингу"
+                }
 
         elif provider == ModelProvider.ANTHROPIC.value:
             client = Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -707,62 +731,34 @@ def generate_legal_position(
                 print(f"[DEBUG] Anthropic response text length: {len(response_text)}")
                 print(f"[DEBUG] Response preview (first 500 chars): {response_text[:500]}")
                 
-                # Try to extract JSON from markdown code blocks if present
-                text_to_parse = response_text.strip()
+                # Спробуємо розпарсити JSON за допомогою універсальної функції
+                json_response = extract_json_from_text(response_text)
                 
-                # Remove markdown code blocks if present
-                if text_to_parse.startswith("```json"):
-                    text_to_parse = text_to_parse[7:]
-                elif text_to_parse.startswith("```"):
-                    text_to_parse = text_to_parse[3:]
-                
-                if text_to_parse.endswith("```"):
-                    text_to_parse = text_to_parse[:-3]
-                
-                text_to_parse = text_to_parse.strip()
-                
-                # Try to find JSON object in the text
-                start_idx = text_to_parse.find('{')
-                end_idx = text_to_parse.rfind('}')
-                
-                if start_idx != -1 and end_idx != -1:
-                    text_to_parse = text_to_parse[start_idx:end_idx + 1]
-                else:
-                    print(f"[WARNING] No JSON object delimiters found in response")
-                
-                # Try to parse JSON
-                try:
-                    parsed_json = json.loads(text_to_parse)
-                    
+                if json_response:
                     # Validate required fields
                     required = ["title", "text", "proceeding", "category"]
-                    missing = [f for f in required if f not in parsed_json]
+                    missing = [f for f in required if f not in json_response]
                     if missing:
-                        print(f"[WARNING] Missing fields in JSON: {missing}")
-                        # Try to fill missing fields
+                        print(f"[WARNING] Missing fields in Anthropic JSON: {missing}")
                         for field in missing:
-                            if field not in parsed_json:
-                                parsed_json[field] = "Не вказано"
-                    
-                    return parsed_json
-                    
-                except json.JSONDecodeError as je:
-                    print(f"[ERROR] JSON parsing failed: {je}")
-                    print(f"[ERROR] Attempted to parse: {text_to_parse[:1000]}")
-                    
+                            if field not in json_response:
+                                json_response[field] = "Не вказано"
+                    return json_response
+                else:
+                    print(f"[ERROR] Could not extract JSON from Anthropic response")
                     # Fallback: create structured response from raw text
-                    fallback = {
+                    return {
                         "title": "Автоматично згенерований заголовок",
                         "text": response_text.strip(),
                         "proceeding": "Не визначено",
                         "category": "Помилка парсингу JSON"
                     }
-                    print(f"[WARNING] Using fallback response structure")
-                    return fallback
-                    
             except Exception as e:
-                print(f"[ERROR] Exception during response processing: {type(e).__name__}: {e}")
-                raise Exception(f"Помилка при обробці відповіді від моделі Anthropic: {str(e)}")
+                # Скидання помилки для подальшого аналізу
+                error_details = str(e)
+                if hasattr(e, 'response'):
+                    error_details += f"\nResponse: {e.response}"
+                raise RuntimeError(f"Error in Anthropic analysis: {error_details}")
 
         elif provider == ModelProvider.GEMINI.value:
             if not os.environ.get("GEMINI_API_KEY"):
@@ -819,51 +815,30 @@ def generate_legal_position(
                 if not response_text:
                     raise Exception("Пуста відповідь від моделі Gemini")
 
-                # Спробуємо розпарсити JSON
-                try:
-                    # Try to extract JSON from markdown code blocks if present
-                    text_to_parse = response_text.strip()
-                    
-                    # Remove markdown code blocks if present
-                    if text_to_parse.startswith("```json"):
-                        text_to_parse = text_to_parse[7:]  # Remove ```json
-                    elif text_to_parse.startswith("```"):
-                        text_to_parse = text_to_parse[3:]  # Remove ```
-                    
-                    if text_to_parse.endswith("```"):
-                        text_to_parse = text_to_parse[:-3]  # Remove trailing ```
-                    
-                    text_to_parse = text_to_parse.strip()
-                    
-                    # Try to find JSON object in the text
-                    start_idx = text_to_parse.find('{')
-                    end_idx = text_to_parse.rfind('}')
-                    
-                    if start_idx != -1 and end_idx != -1:
-                        text_to_parse = text_to_parse[start_idx:end_idx + 1]
-                    
-                    json_response = json.loads(text_to_parse)
-
+                # Спробуємо розпарсити JSON за допомогою універсальної функції
+                json_response = extract_json_from_text(response_text)
+                
+                if json_response:
                     # Перевіряємо наявність всіх необхідних полів
                     required_fields = ["title", "text", "proceeding", "category"]
                     if all(field in json_response for field in required_fields):
                         return json_response
                     else:
                         missing_fields = [field for field in required_fields if field not in json_response]
-                        raise Exception(f"Відсутні обов'язкові поля у відповіді: {', '.join(missing_fields)}")
-
-                except json.JSONDecodeError as je:
-                    print(f"JSON parsing error: {str(je)}")
-                    print(f"Response text: {response_text[:500]}")  # Log first 500 chars
-                    # Якщо відповідь не в форматі JSON, спробуємо створити структурований об'єкт
-                    # з текстової відповіді (fallback mechanism)
-                    fallback_response = {
+                        print(f"[WARNING] Gemini response missing fields: {missing_fields}")
+                        # Fallback for missing fields
+                        for field in required_fields:
+                            if field not in json_response:
+                                json_response[field] = "Не визначено"
+                        return json_response
+                else:
+                    print(f"[ERROR] Could not extract JSON from Gemini response: {response_text[:300]}...")
+                    return {
                         "title": "Автоматично сформований заголовок",
                         "text": response_text.strip(),
                         "proceeding": "Не визначено",
-                        "category": "Автоматично визначена категорія"
+                        "category": "Помилка парсингу"
                     }
-                    return fallback_response
 
             except Exception as e:
                 print(f"Error in Gemini generation: {str(e)}")
