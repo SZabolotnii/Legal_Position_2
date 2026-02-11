@@ -579,6 +579,14 @@ def generate_legal_position(
         print(f"[DEBUG] FINAL court_decision_text preview: {court_decision_text[:300]}")
         print(f"[DEBUG] comment_input: {comment_input[:100] if comment_input else 'Empty'}")
 
+        # Check if placeholders exist in the prompt, if not - append them to the end
+        if "{court_decision_text}" not in lp_prompt:
+            print("[WARNING] {court_decision_text} placeholder missing in prompt! Appending to the end.")
+            lp_prompt += "\n\n<court_decision>\n{court_decision_text}\n</court_decision>"
+        
+        if "{comment}" not in lp_prompt:
+            lp_prompt += "\n\n<comment>\n{comment}\n</comment>"
+
         content = lp_prompt.format(
             court_decision_text=court_decision_text,
             comment=comment_input if comment_input else "Коментар відсутній"

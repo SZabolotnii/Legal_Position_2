@@ -17,6 +17,14 @@ LEGAL_POSITION_PROMPT = """<task>
 4. **Категорію** — конкретна правова категорія з посиланням на статті закону
 </task>
 
+<court_decision>
+{court_decision_text}
+</court_decision>
+
+<comment>
+{comment}
+</comment>
+
 <rules>
 <rule id="abstraction">
 Формулюй правову позицію як АБСТРАКТНЕ ПРАВИЛО, придатне для застосування
