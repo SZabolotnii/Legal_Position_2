@@ -156,15 +156,19 @@ def extract_json_from_text(text: str) -> Optional[Dict]:
     # 2. Try to find JSON within markdown or other text
     text_to_parse = text.strip()
     
-    # Remove markdown code blocks
-    if "```json" in text_to_parse:
-        parts = text_to_parse.split("```json")
-        if len(parts) > 1:
-            text_to_parse = parts[1].split("```")[0].strip()
-    elif "```" in text_to_parse:
-        parts = text_to_parse.split("```")
-        if len(parts) > 1:
-            text_to_parse = parts[1].strip()
+    # Remove markdown code blocks with triple backticks or triple single quotes
+    for delimiter in ["```json", "'''json", "```", "'''"]:
+        if delimiter in text_to_parse:
+            try:
+                parts = text_to_parse.split(delimiter)
+                if len(parts) > 1:
+                    # Take the first content block after the delimiter
+                    candidate = parts[1].split(delimiter.replace("json", ""))[0].strip()
+                    if candidate:
+                        text_to_parse = candidate
+                        break
+            except Exception:
+                continue
     
     try:
         return json.loads(text_to_parse)
@@ -172,14 +176,16 @@ def extract_json_from_text(text: str) -> Optional[Dict]:
         pass
     
     # 3. Last resort: find the first { and last }
+    # Try to balance braces to handle potential truncation or trailing noise
     start_idx = text_to_parse.find('{')
-    end_idx = text_to_parse.rfind('}')
-    
-    if start_idx != -1 and end_idx != -1:
-        text_to_parse = text_to_parse[start_idx:end_idx + 1]
-        try:
-            return json.loads(text_to_parse)
-        except json.JSONDecodeError:
-            pass
+    if start_idx != -1:
+        # Step backwards from the end to find the last valid-looking closing brace
+        for end_idx in range(len(text_to_parse) - 1, start_idx, -1):
+            if text_to_parse[end_idx] == '}':
+                candidate = text_to_parse[start_idx:end_idx + 1]
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    continue
             
     return None
