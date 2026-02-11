@@ -187,6 +187,7 @@ async def process_input(
         input_type = "text"
         input_text = ""
 
+        # Determine which input source has actual content
         if input_method == "Завантаження файлу":
             if not file_input:
                 return "❌ Помилка: Будь ласка, завантажте файл", None, session_id
@@ -200,11 +201,16 @@ async def process_input(
             input_type = "url"
             input_text = url_input
         else:
-            input_text = text_input
+            # Default to text input, but check if URL is provided instead
+            if url_input and url_input.strip():
+                input_type = "url"
+                input_text = url_input
+            else:
+                input_text = text_input
 
         # Check if input is empty and provide specific error message
         if not input_text or not input_text.strip():
-            if input_method == "URL посилання":
+            if input_method == "URL посилання" or (url_input and url_input.strip()):
                 return "❌ Помилка: Будь ласка, введіть URL посилання на судове рішення", None, session_id
             elif input_method == "Текстовий ввід":
                 return "❌ Помилка: Будь ласка, введіть текст судового рішення", None, session_id
@@ -261,6 +267,7 @@ async def process_raw_text_search(text, url, file, method, state_lp_json):
     """Process raw text search and update necessary states."""
     try:
         input_text = ""
+        # Determine which input source has actual content
         if method == "Завантаження файлу":
             if not file:
                 return "❌ Помилка: Будь ласка, завантажте файл", None, state_lp_json
@@ -273,11 +280,15 @@ async def process_raw_text_search(text, url, file, method, state_lp_json):
         elif method == "URL посилання":
             input_text = url
         else:
-            input_text = text
+            # Default to text input, but check if URL is provided instead
+            if url and url.strip():
+                input_text = url
+            else:
+                input_text = text
 
         # Check if input is empty and provide specific error message
         if not input_text or not input_text.strip():
-            if method == "URL посилання":
+            if method == "URL посилання" or (url and url.strip()):
                 return "❌ Помилка: Будь ласка, введіть URL посилання на судове рішення", None, state_lp_json
             elif method == "Текстовий ввід":
                 return "❌ Помилка: Будь ласка, введіть текст судового рішення", None, state_lp_json
