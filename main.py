@@ -601,30 +601,32 @@ def generate_legal_position(
             raise Exception(f"Текст судового рішення занадто короткий або відсутній (довжина: {len(court_decision_text) if court_decision_text else 0} символів). Будь ласка, перевірте вхідні дані.")
 
         if provider == ModelProvider.OPENAI.value:
-            llm = LlamaOpenAI(
-                model=model_name,
-                temperature=GENERATION_TEMPERATURE,
-                max_tokens=MAX_TOKENS_CONFIG["openai"]
-            )
-            messages = [
-                ChatMessage(role="system", content=system_prompt),
-                ChatMessage(role="user", content=content),
-            ]
-            
+            client = OpenAI(api_key=OPENAI_API_KEY)
             try:
-                response = llm.chat(messages, response_format=LEGAL_POSITION_SCHEMA)
-                response_text = response.message.content
+                print(f"[DEBUG] OpenAI Generation - Model: {model_name}")
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": content},
+                    ],
+                    temperature=GENERATION_TEMPERATURE,
+                    max_tokens=MAX_TOKENS_CONFIG["openai"],
+                )
+                response_text = response.choices[0].message.content
+                print(f"[DEBUG] OpenAI response length: {len(response_text)}")
                 
                 json_response = extract_json_from_text(response_text)
                 if json_response and all(key in json_response for key in ["title", "text", "proceeding", "category"]):
                     return json_response
                 else:
-                    raise ValueError(f"Invalid JSON structure from OpenAI: {response_text[:200]}...")
+                    print(f"[WARNING] Invalid JSON structure from OpenAI. Text: {response_text[:300]}...")
+                    raise ValueError("Invalid JSON structure")
             except Exception as e:
                 print(f"[ERROR] OpenAI generation/parsing failed: {e}")
                 return {
                     "title": "Автоматично сформований заголовок (OpenAI)",
-                    "text": content[:500] if not 'response_text' in locals() else response_text,
+                    "text": response_text.strip() if 'response_text' in locals() else "Помилка при отриманні відповіді",
                     "proceeding": "Не визначено",
                     "category": "Помилка парсингу"
                 }
@@ -632,6 +634,7 @@ def generate_legal_position(
         if provider == ModelProvider.DEEPSEEK.value:
             client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
             try:
+                print(f"[DEBUG] DeepSeek Generation - Model: {model_name}")
                 response = client.chat.completions.create(
                     model=model_name,
                     messages=[
@@ -640,23 +643,21 @@ def generate_legal_position(
                     ],
                     temperature=GENERATION_TEMPERATURE,
                     max_tokens=MAX_TOKENS_CONFIG["deepseek"],
-                    response_format={
-                        'type': 'json_object'
-                    },
-                    stream=False
                 )
                 response_text = response.choices[0].message.content
+                print(f"[DEBUG] DeepSeek response length: {len(response_text)}")
                 
                 json_response = extract_json_from_text(response_text)
                 if json_response and all(key in json_response for key in ["title", "text", "proceeding", "category"]):
                     return json_response
                 else:
-                    raise ValueError(f"Invalid JSON structure from DeepSeek: {response_text[:200]}...")
+                    print(f"[WARNING] Invalid JSON structure from DeepSeek. Text: {response_text[:300]}...")
+                    raise ValueError("Invalid JSON structure")
             except Exception as e:
                 print(f"[ERROR] DeepSeek generation/parsing failed: {e}")
                 return {
                     "title": "Автоматично сформований заголовок (DeepSeek)",
-                    "text": "Помилка при отриманні відповіді від DeepSeek",
+                    "text": response_text.strip() if 'response_text' in locals() else "Помилка при отриманні відповіді від DeepSeek",
                     "proceeding": "Не визначено",
                     "category": "Помилка API/Парсингу"
                 }
@@ -799,8 +800,8 @@ def generate_legal_position(
                     )
                 
                 # Only add response_mime_type for models that support it
-                if not model_name.startswith("gemini-3"):
-                    config_params["response_mime_type"] = "application/json"
+                # if not model_name.startswith("gemini-3"):
+                #     config_params["response_mime_type"] = "application/json"
                 
                 generate_content_config = types.GenerateContentConfig(**config_params)
 
@@ -814,6 +815,9 @@ def generate_legal_position(
                 # Перевіряємо наявність тексту у відповіді
                 if not response_text:
                     raise Exception("Пуста відповідь від моделі Gemini")
+
+                print(f"[DEBUG] Gemini response length: {len(response_text)}")
+                print(f"[DEBUG] Gemini response preview: {response_text[:300]}...")
 
                 # Спробуємо розпарсити JSON за допомогою універсальної функції
                 json_response = extract_json_from_text(response_text)

@@ -23,10 +23,10 @@ llama_index:
 # Generation Settings
 generation:
   max_tokens:
-    openai: 1024
-    anthropic: 1024
-    gemini: 1024
-    deepseek: 1024
+    openai: 4096
+    anthropic: 4096
+    gemini: 4096
+    deepseek: 4096
   max_tokens_analysis: 4000
   temperature: 0.5
 
