@@ -1,0 +1,13 @@
+Save_Index_Local/bm25_retriever_es/corpus.jsonl filter=lfs diff=lfs merge=lfs -text
+Save_Index_Local/docstore_es_filter.json filter=lfs diff=lfs merge=lfs -text
+local_bm25_retriever_es/corpus.jsonl filter=lfs diff=lfs merge=lfs -text
+local_data/docstore_es_filter.json filter=lfs diff=lfs merge=lfs -text
+local_data/bm25_retriever_es/corpus.jsonl filter=lfs diff=lfs merge=lfs -text
+path/to/large_file filter=lfs diff=lfs merge=lfs -text
+Save_Index_Local/bm25_retriever_es/data.csc.index.npy filter=lfs diff=lfs merge=lfs -text
+Save_Index_Local/bm25_retriever_es/indices.csc.index.npy filter=lfs diff=lfs merge=lfs -text
+local_data/bm25_retriever_es/data.csc.index.npy filter=lfs diff=lfs merge=lfs -text
+local_data/bm25_retriever_es/indices.csc.index.npy filter=lfs diff=lfs merge=lfs -text
+*.sqlite3 filter=lfs diff=lfs merge=lfs -text
+*.db filter=lfs diff=lfs merge=lfs -text
+chroma_db_hf/* filter=lfs diff=lfs merge=lfs -text

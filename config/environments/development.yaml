@@ -1,0 +1,27 @@
+# Development environment configuration
+
+app:
+  debug: true
+  environment: "development"
+
+# AWS S3 Configuration - use local files in development
+aws:
+  prefix_retriever: "Save_Index_Local/"
+  local_dir: "Save_Index_Local"
+
+# Session Management - shorter timeouts for development
+session:
+  timeout_minutes: 15
+  cleanup_interval_minutes: 2
+  max_sessions: 100
+
+# Logging - more verbose in development
+logging:
+  level: "DEBUG"
+  console: true
+
+# Gradio - don't share in development
+gradio:
+  share: false
+  show_error: true
+  ssr_mode: false

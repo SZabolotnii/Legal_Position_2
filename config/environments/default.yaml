@@ -1,0 +1,183 @@
+# Default configuration for Legal Position AI Analyzer
+
+app:
+  name: "Legal Position AI Analyzer"
+  version: "1.0.0"
+  debug: false
+  environment: "production"
+
+# AWS S3 Configuration
+aws:
+  bucket_name: "legal-position"
+  region: "eu-north-1"
+  prefix_retriever: "Save_Index_Ivan/"
+  local_dir: "Save_Index_Ivan"
+
+# LlamaIndex Settings
+llama_index:
+  context_window: 20000
+  chunk_size: 2048
+  similarity_top_k: 20
+  embed_model: "text-embedding-3-small"
+
+# Generation Settings
+generation:
+  max_tokens:
+    openai: 512
+    anthropic: 512
+    gemini: 512
+    deepseek: 512
+  max_tokens_analysis: 2000
+  temperature: 0.5
+
+# Model Providers Configuration
+models:
+  # Default provider for UI (used in interface.py)
+  default_provider: "anthropic"
+
+  providers:
+    - openai
+    - anthropic
+    - gemini
+    - deepseek
+
+  # Generation Models
+  generation:
+    openai:
+      - name: "gpt-4.1"
+        display_name: "GPT-4.1"
+      - name: "ft:gpt-4o-mini-2024-07-18:personal:lp-1700-part-cd-120:AqhCe5Aq"
+        display_name: "GPT-4o Mini FT1"
+      - name: "ft:gpt-4o-mini-2024-07-18:personal:legal-position-1700:AbNt5I2x"
+        display_name: "GPT-4o Mini FT2"
+
+    anthropic:
+      - name: "claude-opus-4-5-20251101"
+        display_name: "Claude Opus 4.5"
+      - name: "claude-haiku-4-5-20251001"
+        display_name: "Claude Haiku 4.5"
+      - name: "claude-sonnet-4-5-20250929"
+        display_name: "Claude Sonnet 4.5"
+        default: true
+
+    gemini:
+      - name: "gemini-3-flash-preview"
+        display_name: "Gemini 3 Flash"
+      - name: "gemini-3-pro-preview"
+        display_name: "Gemini 3 Pro"
+
+    deepseek:
+      - name: "deepseek-chat"
+        display_name: "DeepSeek Chat"
+
+  # Analysis Models
+  analysis:
+    openai:
+      - name: "gpt-4.1"
+        display_name: "GPT-4.1"
+      - name: "gpt-4o"
+        display_name: "GPT-4o"
+      - name: "gpt-4o-mini"
+        display_name: "GPT-4o Mini"
+
+    anthropic:
+      - name: "claude-3-7-sonnet-20250219"
+        display_name: "Claude 3.7 Sonnet"
+      - name: "claude-opus-4-5-20251101"
+        display_name: "Claude Opus 4.5"
+      - name: "claude-haiku-4-5-20251001"
+        display_name: "Claude Haiku 4.5"
+      - name: "claude-sonnet-4-5-20250929"
+        display_name: "Claude Sonnet 4.5"
+
+    gemini:
+      - name: "gemini-3-flash-preview"
+        display_name: "Gemini 3 Flash"
+        default: true
+      - name: "gemini-3-pro-preview"
+        display_name: "Gemini 3 Pro"
+
+    deepseek:
+      - name: "deepseek-chat"
+        display_name: "DeepSeek Chat"
+
+# JSON Schema for Legal Position
+schemas:
+  legal_position:
+    type: "json_schema"
+    required_fields:
+      - title
+      - text
+      - proceeding
+      - category
+    schema:
+      type: "object"
+      properties:
+        title:
+          type: "string"
+          description: "Title of the legal position"
+        text:
+          type: "string"
+          description: "Text of the legal position"
+        proceeding:
+          type: "string"
+          description: "Type of court proceedings"
+        category:
+          type: "string"
+          description: "Category of the legal position"
+      required:
+        - title
+        - text
+        - proceeding
+        - category
+      additionalProperties: false
+
+# Required files for initialization
+required_files:
+  - "docstore_es_filter.json"
+  - "bm25_retriever_short"
+  - "bm25_retriever"
+
+# Session Management Configuration
+session:
+  timeout_minutes: 30
+  cleanup_interval_minutes: 5
+  max_sessions: 1000
+  storage_type: "memory"  # Options: memory, redis
+
+# Redis Configuration (if using redis storage)
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: null
+  ssl: false
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/app.log"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5
+  console: true
+
+# Gradio Interface Configuration
+gradio:
+  server_name: "0.0.0.0"
+  server_port: 7860
+  share: true
+  show_error: true
+  ssr_mode: true
+  # Theme configuration for Gradio 6
+  theme:
+    base: "Soft"
+    primary_hue: "blue"
+    secondary_hue: "indigo"
+  # Custom CSS
+  css: |
+    .contain { display: flex; flex-direction: column; }
+    .tab-content { padding: 16px; border-radius: 8px; background: white; }
+    .header { margin-bottom: 24px; text-align: center; }
+    .tab-header { font-size: 1.2em; margin-bottom: 16px; color: #2563eb; }
+

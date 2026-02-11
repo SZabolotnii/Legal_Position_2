@@ -1,0 +1,54 @@
+# Ігноруємо конфігураційні файли PyCharm
+.idea/
+
+# Ігноруємо віртуальне середовище
+.venv/
+venv/
+venv_lp/
+
+# Ігноруємо кеші Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Ігноруємо конфіденційні файли
+.env
+.env.local
+
+# Ігноруємо папки з індексами та локальними даними
+Save_index/
+Save_Index/
+Save_Index_Ivan/
+Save_Index_Local/
+local_data/
+legal-position-indexes/
+/lp/
+.gradio/
+
+# Ігноруємо бекапи
+*.tar.gz
+*.zip
+*_backup_*/
+hf_deploy_backup_*/
+Legal_Position.git/
+legal-position-backup.tar.gz
+
+# Ігноруємо результати тестування
+test_results/
+test_docs/
+tests/__pycache__/
+.pytest_cache/
+
+# Ігноруємо логи
+logs/
+*.log
+
+# Ігноруємо системні файли
+.DS_Store
+.Rhistory
+.claude/
+
+# Ігноруємо isolated проєкти (якщо вони є в репозиторії)
+isolated-lp-generation/
