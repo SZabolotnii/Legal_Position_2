@@ -244,7 +244,7 @@ class RetrieverEvent(Event):
 class LLMAnalyzer:
     """Class for handling different LLM providers."""
 
-    def __init__(self, provider: ModelProvider, model_name: AnalysisModelName):
+    def __init__(self, provider: "ModelProvider", model_name: "AnalysisModelName"):
         self.provider = provider
         self.model_name = model_name
 
@@ -281,8 +281,15 @@ class LLMAnalyzer:
 
     async def _analyze_with_openai(self, prompt: str, response_schema: dict) -> str:
         """Analyze text using OpenAI."""
+        # Determine model name and if it's a reasoning model
+        model_val = self.model_name.value if hasattr(self.model_name, "value") else str(self.model_name)
+        is_reasoning_model = any(m in model_val.lower() for m in ["gpt-4.1", "gpt-4.5", "o1", "o3"])
+        
+        # Use developer role for newer models
+        role = "developer" if is_reasoning_model else "system"
+        
         messages = [
-            ChatMessage(role="system", content=SYSTEM_PROMPT),
+            ChatMessage(role=role, content=SYSTEM_PROMPT),
             ChatMessage(role="user", content=prompt)
         ]
 
@@ -295,19 +302,24 @@ class LLMAnalyzer:
         }
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": m.role, "content": m.content} for m in messages],
-                response_format=response_format,
-                temperature=0
-            )
+            completion_params = {
+                "model": model_val,
+                "messages": [{"role": m.role, "content": m.content} for m in messages],
+                "response_format": response_format,
+            }
+            
+            # Reasoning models usually require temperature=1.0 or none
+            if not is_reasoning_model:
+                completion_params["temperature"] = 0
+
+            response = self.client.chat.completions.create(**completion_params)
             response_text = response.choices[0].message.content
             
             # Verify it's valid JSON
             json_data = extract_json_from_text(response_text)
             return json.dumps(json_data, ensure_ascii=False) if json_data else response_text
         except Exception as e:
-            raise RuntimeError(f"Error in OpenAI analysis: {str(e)}")
+            raise RuntimeError(f"Error in OpenAI analysis ({model_val}): {str(e)}")
 
     async def _analyze_with_deepseek(self, prompt: str) -> str:
         """Analyze text using DeepSeek."""
@@ -604,29 +616,52 @@ def generate_legal_position(
             client = OpenAI(api_key=OPENAI_API_KEY)
             try:
                 print(f"[DEBUG] OpenAI Generation - Model: {model_name}")
-                response = client.chat.completions.create(
-                    model=model_name,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": content},
-                    ],
-                    temperature=GENERATION_TEMPERATURE,
-                    max_tokens=MAX_TOKENS_CONFIG["openai"],
-                )
+                
+                # Check for reasoning models (gpt-4.1, o1, etc.)
+                is_reasoning_model = any(m in model_name.lower() for m in ["gpt-4.1", "gpt-4.5", "o1", "o3"])
+                
+                # Use developer role for newer models, system for others
+                role = "developer" if is_reasoning_model else "system"
+                
+                messages = [
+                    {"role": role, "content": system_prompt},
+                    {"role": "user", "content": content},
+                ]
+                
+                # Parameters for chat completion
+                completion_params = {
+                    "model": model_name,
+                    "messages": messages,
+                }
+                
+                # Set tokens based on model capabilities
+                if is_reasoning_model:
+                    completion_params["max_completion_tokens"] = MAX_TOKENS_CONFIG["openai"]
+                else:
+                    completion_params["max_tokens"] = MAX_TOKENS_CONFIG["openai"]
+                
+                # Handle thinking/reasoning
+                if thinking_enabled and is_reasoning_model:
+                    completion_params["reasoning_effort"] = thinking_level.lower()
+                    # Reasoning models usually don't support temperature or it must be 1.0
+                else:
+                    completion_params["temperature"] = GENERATION_TEMPERATURE
+
+                response = client.chat.completions.create(**completion_params)
                 response_text = response.choices[0].message.content
-                print(f"[DEBUG] OpenAI response length: {len(response_text)}")
+                print(f"[DEBUG] OpenAI response length: {len(response_text) if response_text else 0}")
                 
                 json_response = extract_json_from_text(response_text)
                 if json_response and all(key in json_response for key in ["title", "text", "proceeding", "category"]):
                     return json_response
                 else:
-                    print(f"[WARNING] Invalid JSON structure from OpenAI. Text: {response_text[:300]}...")
+                    print(f"[WARNING] Invalid JSON structure from OpenAI. Text: {response_text[:300] if response_text else 'None'}...")
                     raise ValueError("Invalid JSON structure")
             except Exception as e:
                 print(f"[ERROR] OpenAI generation/parsing failed: {e}")
                 return {
                     "title": "Автоматично сформований заголовок (OpenAI)",
-                    "text": response_text.strip() if 'response_text' in locals() else "Помилка при отриманні відповіді",
+                    "text": response_text.strip() if 'response_text' in locals() and response_text else f"Помилка при отриманні відповіді: {str(e)}",
                     "proceeding": "Не визначено",
                     "category": "Помилка парсингу"
                 }
