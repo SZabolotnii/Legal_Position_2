@@ -682,23 +682,23 @@ def generate_legal_position(
             raise Exception(f"Текст судового рішення занадто короткий або відсутній (довжина: {len(court_decision_text) if court_decision_text else 0} символів). Будь ласка, перевірте вхідні дані.")
 
         if provider == ModelProvider.OPENAI.value:
-            # Use custom httpx client to avoid async loop issues on HF Spaces
-            # This is critical for stable connection in threaded environments like Gradio
-            http_client = httpx.Client(
-                timeout=120.0,
-                transport=httpx.HTTPTransport(retries=3)
-            )
-            client = OpenAI(
-                api_key=OPENAI_API_KEY, 
-                http_client=http_client
-            )
-            
-            # Retry logic for connection errors
-            max_retries = 3
-            last_error = None
-            response = None
-            
+            # Use context-managed httpx client to avoid socket/fd leaks in threaded Gradio env
+            http_client = None
+            response_text = None
             try:
+                http_client = httpx.Client(
+                    timeout=httpx.Timeout(120.0, connect=30.0),
+                )
+                client = OpenAI(
+                    api_key=OPENAI_API_KEY, 
+                    http_client=http_client
+                )
+                
+                # Retry logic for connection errors
+                max_retries = 3
+                last_error = None
+                response = None
+                
                 print(f"[DEBUG] OpenAI Generation - Model: {model_name}")
                 
                 # Check for reasoning models (gpt-4.1, o1, etc.)
@@ -739,7 +739,11 @@ def generate_legal_position(
                     except Exception as api_err:
                         last_error = api_err
                         error_type = type(api_err).__name__
-                        print(f"[ERROR] OpenAI API attempt {attempt + 1} failed: {error_type}: {str(api_err)}")
+                        error_detail = str(api_err)
+                        # Log underlying cause for connection errors
+                        if hasattr(api_err, '__cause__') and api_err.__cause__:
+                            error_detail += f" | Cause: {type(api_err.__cause__).__name__}: {api_err.__cause__}"
+                        print(f"[ERROR] OpenAI API attempt {attempt + 1} failed: {error_type}: {error_detail}")
                         if attempt < max_retries - 1:
                             wait_time = 2 ** attempt  # 1, 2, 4 seconds
                             print(f"[DEBUG] Retrying in {wait_time}s...")
@@ -763,29 +767,36 @@ def generate_legal_position(
                 print(f"[ERROR] OpenAI generation/parsing failed: {e}")
                 return {
                     "title": "Автоматично сформований заголовок (OpenAI)",
-                    "text": response_text.strip() if 'response_text' in locals() and response_text else f"Помилка при отриманні відповіді: {str(e)}",
+                    "text": response_text.strip() if response_text else f"Помилка при отриманні відповіді: {str(e)}",
                     "proceeding": "Не визначено",
                     "category": "Помилка парсингу"
                 }
+            finally:
+                if http_client:
+                    try:
+                        http_client.close()
+                    except Exception:
+                        pass
 
         if provider == ModelProvider.DEEPSEEK.value:
-            # Use custom httpx client for DeepSeek on HF Spaces
-            http_client = httpx.Client(
-                timeout=120.0,
-                transport=httpx.HTTPTransport(retries=3)
-            )
-            client = OpenAI(
-                api_key=DEEPSEEK_API_KEY, 
-                base_url="https://api.deepseek.com", 
-                http_client=http_client
-            )
-            
-            # Retry logic for DeepSeek
-            max_retries = 3
-            last_error = None
-            response = None
-            
+            # Use context-managed httpx client for DeepSeek to avoid socket/fd leaks
+            http_client = None
+            response_text = None
             try:
+                http_client = httpx.Client(
+                    timeout=httpx.Timeout(120.0, connect=30.0),
+                )
+                client = OpenAI(
+                    api_key=DEEPSEEK_API_KEY, 
+                    base_url="https://api.deepseek.com", 
+                    http_client=http_client
+                )
+                
+                # Retry logic for DeepSeek
+                max_retries = 3
+                last_error = None
+                response = None
+                
                 print(f"[DEBUG] DeepSeek Generation - Model: {model_name}")
                 
                 # Check for reasoning model (DeepSeek R1)
@@ -842,10 +853,16 @@ def generate_legal_position(
                 print(f"[ERROR] DeepSeek generation/parsing failed: {e}")
                 return {
                     "title": "Автоматично сформований заголовок (DeepSeek)",
-                    "text": response_text.strip() if 'response_text' in locals() and response_text else f"Помилка при отриманні відповіді від DeepSeek: {str(e)}",
+                    "text": response_text.strip() if response_text else f"Помилка при отриманні відповіді від DeepSeek: {str(e)}",
                     "proceeding": "Не визначено",
                     "category": "Помилка API/Парсингу"
                 }
+            finally:
+                if http_client:
+                    try:
+                        http_client.close()
+                    except Exception:
+                        pass
 
         elif provider == ModelProvider.ANTHROPIC.value:
             client = Anthropic(api_key=ANTHROPIC_API_KEY)

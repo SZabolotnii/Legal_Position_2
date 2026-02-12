@@ -4,7 +4,13 @@ Hugging Face Spaces entry point for Legal Position AI Analyzer
 """
 import os
 import sys
+import warnings
+import logging
 from pathlib import Path
+
+# Suppress asyncio event loop __del__ warnings (known Python 3.11 issue in threaded envs)
+warnings.filterwarnings("ignore", message=".*Invalid file descriptor.*")
+logging.getLogger("asyncio").setLevel(logging.CRITICAL)
 
 # Set environment for Hugging Face Spaces
 os.environ['GRADIO_SERVER_NAME'] = '0.0.0.0'
@@ -72,14 +78,17 @@ def run_network_diagnostics():
         except Exception as e:
             print(f"  ❌ {name} ({url}) -> {type(e).__name__}: {e}")
     
-    # Check httpx (used by anthropic SDK)
+    # Check httpx (used by anthropic/openai SDKs)
     print("\n🔧 httpx connectivity test:")
     try:
         import httpx
         print(f"  httpx version: {httpx.__version__}")
         with httpx.Client(timeout=10) as client:
             resp = client.get("https://api.anthropic.com")
-            print(f"  ✅ httpx -> HTTP {resp.status_code}")
+            print(f"  ✅ httpx -> Anthropic HTTP {resp.status_code}")
+        with httpx.Client(timeout=10) as client:
+            resp = client.get("https://api.openai.com")
+            print(f"  ✅ httpx -> OpenAI HTTP {resp.status_code}")
     except Exception as e:
         print(f"  ❌ httpx -> {type(e).__name__}: {e}")
     
