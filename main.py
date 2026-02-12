@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import boto3
+import httpx
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from anthropic import Anthropic
@@ -251,11 +252,20 @@ class LLMAnalyzer:
         if provider == ModelProvider.OPENAI:
             if not OPENAI_API_KEY:
                 raise ValueError(f"OpenAI API key not configured. Please set OPENAI_API_KEY environment variable to use {provider.value} provider.")
-            self.client = openai.OpenAI(api_key=OPENAI_API_KEY, timeout=120.0)
+            self.client = openai.OpenAI(
+                api_key=OPENAI_API_KEY, 
+                timeout=120.0,
+                http_client=httpx.Client(http2=False, timeout=120.0)
+            )
         elif provider == ModelProvider.DEEPSEEK:
             if not DEEPSEEK_API_KEY:
                 raise ValueError(f"DeepSeek API key not configured. Please set DEEPSEEK_API_KEY environment variable to use {provider.value} provider.")
-            self.client = openai.OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com", timeout=120.0)
+            self.client = openai.OpenAI(
+                api_key=DEEPSEEK_API_KEY, 
+                base_url="https://api.deepseek.com", 
+                timeout=120.0,
+                http_client=httpx.Client(http2=False, timeout=120.0)
+            )
         elif provider == ModelProvider.ANTHROPIC:
             if not ANTHROPIC_API_KEY:
                 raise ValueError(f"Anthropic API key not configured. Please set ANTHROPIC_API_KEY environment variable to use {provider.value} provider.")
@@ -653,7 +663,12 @@ def generate_legal_position(
 
         if provider == ModelProvider.OPENAI.value:
             # Increase timeout for complex models and HF Spaces environment
-            client = OpenAI(api_key=OPENAI_API_KEY, timeout=120.0)
+            # Use specific http_client with HTTP/2 disabled to resolve Connection Errors in some environments
+            client = OpenAI(
+                api_key=OPENAI_API_KEY, 
+                timeout=120.0,
+                http_client=httpx.Client(http2=False, timeout=120.0)
+            )
             
             # Retry logic for connection errors
             max_retries = 3
@@ -729,8 +744,14 @@ def generate_legal_position(
                 }
 
         if provider == ModelProvider.DEEPSEEK.value:
-            # Increase timeout for DeepSeek API
-            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com", timeout=120.0)
+            # Increase timeout and improve reliability for DeepSeek API 
+            # Use specific http_client with HTTP/2 disabled to resolve Connection Errors
+            client = OpenAI(
+                api_key=DEEPSEEK_API_KEY, 
+                base_url="https://api.deepseek.com", 
+                timeout=120.0,
+                http_client=httpx.Client(http2=False, timeout=120.0)
+            )
             
             # Retry logic for DeepSeek
             max_retries = 3
