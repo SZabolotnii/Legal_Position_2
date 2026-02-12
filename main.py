@@ -206,11 +206,13 @@ def get_text_length_without_spaces(text: str) -> int:
 
 def get_available_providers() -> Dict[str, bool]:
     """Get status of all AI providers."""
+    # Use os.getenv directly to ensure we get the latest environment state
+    # independent of import time
     return {
-        "openai": bool(OPENAI_API_KEY),
-        "anthropic": bool(ANTHROPIC_API_KEY),
-        "gemini": bool(os.getenv("GEMINI_API_KEY")),
-        "deepseek": bool(DEEPSEEK_API_KEY)
+        "openai": bool(os.getenv("OPENAI_API_KEY", "")),
+        "anthropic": bool(os.getenv("ANTHROPIC_API_KEY", "")),
+        "gemini": bool(os.getenv("GEMINI_API_KEY", "")),
+        "deepseek": bool(os.getenv("DEEPSEEK_API_KEY", ""))
     }
 
 
