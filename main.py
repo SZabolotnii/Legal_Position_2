@@ -4,7 +4,7 @@ import json
 import time
 import boto3
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from anthropic import Anthropic
 import openai
 from openai import OpenAI
@@ -244,7 +244,7 @@ class RetrieverEvent(Event):
 class LLMAnalyzer:
     """Class for handling different LLM providers."""
 
-    def __init__(self, provider: "ModelProvider", model_name: "AnalysisModelName"):
+    def __init__(self, provider: Any, model_name: Any):
         self.provider = provider
         self.model_name = model_name
 
@@ -323,29 +323,36 @@ class LLMAnalyzer:
 
     async def _analyze_with_deepseek(self, prompt: str) -> str:
         """Analyze text using DeepSeek."""
-        messages = [
-            ChatMessage(role="system", content=SYSTEM_PROMPT),
-            ChatMessage(role="user", content=prompt)
-        ]
-
-        response_format = {
-            'type': 'json_object'
-        }
+        model_val = self.model_name.value if hasattr(self.model_name, "value") else str(self.model_name)
+        is_reasoning = "reasoner" in model_val.lower()
+        
+        messages = []
+        if is_reasoning:
+            # DeepSeek R1 does not support system role, combine with user
+            messages.append(ChatMessage(role="user", content=f"{SYSTEM_PROMPT}\n\n{prompt}"))
+        else:
+            messages.append(ChatMessage(role="system", content=SYSTEM_PROMPT))
+            messages.append(ChatMessage(role="user", content=prompt))
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": m.role, "content": m.content} for m in messages],
-                response_format=response_format,
-                temperature=0
-            )
+            completion_params = {
+                "model": model_val,
+                "messages": [{"role": m.role, "content": m.content} for m in messages],
+            }
+            
+            # Use JSON mode and temperature only for non-reasoning models
+            if not is_reasoning:
+                completion_params["response_format"] = {'type': 'json_object'}
+                completion_params["temperature"] = 0
+
+            response = self.client.chat.completions.create(**completion_params)
             response_text = response.choices[0].message.content
             
             # Verify and clean JSON
             json_data = extract_json_from_text(response_text)
             return json.dumps(json_data, ensure_ascii=False) if json_data else response_text
         except Exception as e:
-            raise RuntimeError(f"Error in DeepSeek analysis: {str(e)}")
+            raise RuntimeError(f"Error in DeepSeek analysis ({model_val}): {str(e)}")
 
     async def _analyze_with_anthropic(self, prompt: str, response_schema: dict) -> str:
         """Analyze text using Anthropic."""
@@ -451,8 +458,8 @@ class LLMAnalyzer:
 class PrecedentAnalysisWorkflow(Workflow):
     """Workflow for analyzing legal precedents."""
 
-    def __init__(self, provider: ModelProvider = ModelProvider.OPENAI,
-                 model_name: AnalysisModelName = AnalysisModelName.GPT4o_MINI):
+    def __init__(self, provider: Any = ModelProvider.OPENAI,
+                 model_name: Any = AnalysisModelName.GPT4o_MINI):
         super().__init__()
         self.analyzer = LLMAnalyzer(provider, model_name)
 
@@ -670,29 +677,43 @@ def generate_legal_position(
             client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
             try:
                 print(f"[DEBUG] DeepSeek Generation - Model: {model_name}")
-                response = client.chat.completions.create(
-                    model=model_name,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": content},
-                    ],
-                    temperature=GENERATION_TEMPERATURE,
-                    max_tokens=MAX_TOKENS_CONFIG["deepseek"],
-                )
+                
+                # Check for reasoning model (DeepSeek R1)
+                is_reasoning = "reasoner" in model_name.lower()
+                
+                messages = []
+                if is_reasoning:
+                    # R1 does not support system role, combine with user
+                    combined_content = f"{system_prompt}\n\n{content}"
+                    messages.append({"role": "user", "content": combined_content})
+                else:
+                    messages.append({"role": "system", "content": system_prompt})
+                    messages.append({"role": "user", "content": content})
+
+                completion_params = {
+                    "model": model_name,
+                    "messages": messages,
+                    "max_tokens": MAX_TOKENS_CONFIG["deepseek"],
+                }
+                
+                if not is_reasoning:
+                    completion_params["temperature"] = GENERATION_TEMPERATURE
+
+                response = client.chat.completions.create(**completion_params)
                 response_text = response.choices[0].message.content
-                print(f"[DEBUG] DeepSeek response length: {len(response_text)}")
+                print(f"[DEBUG] DeepSeek response length: {len(response_text) if response_text else 0}")
                 
                 json_response = extract_json_from_text(response_text)
                 if json_response and all(key in json_response for key in ["title", "text", "proceeding", "category"]):
                     return json_response
                 else:
-                    print(f"[WARNING] Invalid JSON structure from DeepSeek. Text: {response_text[:300]}...")
+                    print(f"[WARNING] Invalid JSON structure from DeepSeek. Text: {response_text[:300] if response_text else 'None'}...")
                     raise ValueError("Invalid JSON structure")
             except Exception as e:
                 print(f"[ERROR] DeepSeek generation/parsing failed: {e}")
                 return {
                     "title": "Автоматично сформований заголовок (DeepSeek)",
-                    "text": response_text.strip() if 'response_text' in locals() else "Помилка при отриманні відповіді від DeepSeek",
+                    "text": response_text.strip() if 'response_text' in locals() and response_text else f"Помилка при отриманні відповіді від DeepSeek: {str(e)}",
                     "proceeding": "Не визначено",
                     "category": "Помилка API/Парсингу"
                 }
