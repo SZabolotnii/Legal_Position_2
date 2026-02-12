@@ -236,6 +236,31 @@ def check_provider_available(provider: str) -> Tuple[bool, str]:
     return True, ""
 
 
+def normalize_response_keys(response_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize keys in the response dictionary to match the expected format.
+    Handles variations like 'text_lp' -> 'text' and 'proceeding_type' -> 'proceeding'.
+    """
+    if not response_dict:
+        return response_dict
+    
+    # Map common variations to standard keys
+    key_mapping = {
+        "text_lp": "text",
+        "legal_position_text": "text", 
+        "lp_text": "text",
+        "proceeding_type": "proceeding",
+        "type_of_proceeding": "proceeding"
+    }
+    
+    normalized = response_dict.copy()
+    for variant, standard in key_mapping.items():
+        if variant in normalized and standard not in normalized:
+            normalized[standard] = normalized.pop(variant)
+            
+    return normalized
+
+
 class RetrieverEvent(Event):
     """Event class for retriever operations."""
     nodes: list[NodeWithScore]
@@ -716,6 +741,9 @@ def generate_legal_position(
                 print(f"[DEBUG] OpenAI response length: {len(response_text) if response_text else 0}")
                 
                 json_response = extract_json_from_text(response_text)
+                if json_response:
+                    json_response = normalize_response_keys(json_response)
+                
                 if json_response and all(key in json_response for key in ["title", "text", "proceeding", "category"]):
                     return json_response
                 else:
@@ -784,6 +812,9 @@ def generate_legal_position(
                 print(f"[DEBUG] DeepSeek response length: {len(response_text) if response_text else 0}")
                 
                 json_response = extract_json_from_text(response_text)
+                if json_response:
+                    json_response = normalize_response_keys(json_response)
+                
                 if json_response and all(key in json_response for key in ["title", "text", "proceeding", "category"]):
                     return json_response
                 else:
@@ -872,6 +903,8 @@ def generate_legal_position(
                 json_response = extract_json_from_text(response_text)
                 
                 if json_response:
+                    json_response = normalize_response_keys(json_response)
+                    
                     # Validate required fields
                     required = ["title", "text", "proceeding", "category"]
                     missing = [f for f in required if f not in json_response]
@@ -959,6 +992,8 @@ def generate_legal_position(
                 json_response = extract_json_from_text(response_text)
                 
                 if json_response:
+                    json_response = normalize_response_keys(json_response)
+                    
                     # Перевіряємо наявність всіх необхідних полів
                     required_fields = ["title", "text", "proceeding", "category"]
                     if all(field in json_response for field in required_fields):

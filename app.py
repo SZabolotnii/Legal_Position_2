@@ -12,8 +12,12 @@ os.environ['GRADIO_SERVER_PORT'] = '7860'
 # Avoid uvloop shutdown warnings on HF Spaces
 os.environ.setdefault('UVICORN_LOOP', 'asyncio')
 
-import nest_asyncio
-nest_asyncio.apply()
+# Apply nest_asyncio only if needed (some Python versions have conflicts)
+# try:
+#     import nest_asyncio
+#     nest_asyncio.apply()
+# except Exception as e:
+#     print(f"[WARNING] Could not apply nest_asyncio: {e}")
 
 # Add project root to Python path
 project_root = Path(__file__).parent
@@ -93,14 +97,25 @@ if __name__ == "__main__":
     # Run diagnostics only when executed directly
     run_network_diagnostics()
     
-    print("🚀 Starting Legal Position AI Analyzer on Hugging Face Spaces...")
+    print("🚀 Starting Legal Position AI Analyzer...")
+    
+    # Detect if running on HF Spaces or locally
+    is_hf_space = os.environ.get('SPACE_ID') is not None
     
     # Must call launch() explicitly — Gradio 6 does not auto-launch.
     # ssr_mode=False avoids the "shareable link" error on HF Spaces containers.
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        share=False,
-        show_error=True,
-        ssr_mode=False,
-    )
+    if is_hf_space:
+        # On HF Spaces, use fixed port 7860
+        demo.launch(
+            server_name="0.0.0.0",
+            server_port=7860,
+            share=False,
+            show_error=True,
+            ssr_mode=False,
+        )
+    else:
+        # Locally, let Gradio find an available port
+        demo.launch(
+            share=False,
+            show_error=True,
+        )

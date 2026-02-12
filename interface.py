@@ -14,7 +14,8 @@ from main import (
     generate_legal_position,
     search_with_ai_action,
     analyze_action,
-    search_with_raw_text
+    search_with_raw_text,
+    get_available_providers
 )
 from prompts import SYSTEM_PROMPT, LEGAL_POSITION_PROMPT, PRECEDENT_ANALYSIS_TEMPLATE
 from src.session.manager import get_session_manager
@@ -30,6 +31,12 @@ def load_help_content() -> str:
             return f.read()
     except Exception as e:
         return f"Помилка завантаження довідки: {str(e)}"
+
+
+def get_available_provider_choices() -> list:
+    """Get list of available AI providers based on API key availability."""
+    available = get_available_providers()
+    return [p.value for p in ModelProvider if available.get(p.value, False)]
 
 
 def update_generation_model_choices(provider: str) -> gr.Dropdown:
@@ -466,6 +473,18 @@ def create_gradio_interface() -> gr.Blocks:
     except Exception:
         _default_provider = "anthropic"
     
+    # Get available providers based on API key availability
+    _available_providers = get_available_provider_choices()
+    
+    # If default provider is not available, use first available one
+    if _default_provider not in _available_providers:
+        if _available_providers:
+            _default_provider = _available_providers[0]
+            print(f"[WARNING] Default provider not available, using: {_default_provider}")
+        else:
+            print("[ERROR] No AI providers available! Please set at least one API key.")
+            _default_provider = "anthropic"  # Fallback for UI rendering
+    
     # Get default generation model for the provider
     _gen_models = get_generation_models_by_provider(_default_provider)
     if DEFAULT_GENERATION_MODEL and DEFAULT_GENERATION_MODEL.value in _gen_models:
@@ -538,6 +557,18 @@ def create_gradio_interface() -> gr.Blocks:
             </div>
             """
         )
+        
+        # Show provider availability status
+        _all_providers = {p.value for p in ModelProvider}
+        _unavailable = _all_providers - set(_available_providers)
+        if _unavailable:
+            unavailable_list = ", ".join(sorted(_unavailable))
+            gr.Info(
+                f"⚠️ Недоступні провайдери (відсутні API ключі): {unavailable_list}\n"
+                f"Додайте відповідні API ключі в налаштуваннях HF Space для активації.",
+                title="Інформація про провайдери",
+                duration=10
+            )
 
         # Session state - generates unique ID for each browser session
         session_id_state = gr.State(value=generate_session_id)
@@ -563,7 +594,7 @@ def create_gradio_interface() -> gr.Blocks:
                         gr.Markdown("### 🤖 Налаштування моделі")
                         with gr.Row():
                             generation_provider_dropdown = gr.Dropdown(
-                                choices=[p.value for p in ModelProvider],
+                                choices=_available_providers,
                                 value=_default_provider,
                                 label="Провайдер AI",
                                 container=False,
@@ -680,7 +711,7 @@ def create_gradio_interface() -> gr.Blocks:
 
                 with gr.Row():
                     analysis_provider_dropdown = gr.Dropdown(
-                        choices=[p.value for p in ModelProvider],
+                        choices=_available_providers,
                         value=_default_provider,
                         label="Провайдер AI",
                         scale=1
@@ -781,7 +812,7 @@ def create_gradio_interface() -> gr.Blocks:
 
                 with gr.Row():
                     batch_provider_dropdown = gr.Dropdown(
-                        choices=[p.value for p in ModelProvider],
+                        choices=_available_providers,
                         value=_default_provider,
                         label="Провайдер AI",
                         scale=1
