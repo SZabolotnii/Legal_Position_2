@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import boto3
+import httpx
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from anthropic import Anthropic
@@ -681,8 +682,16 @@ def generate_legal_position(
             raise Exception(f"Текст судового рішення занадто короткий або відсутній (довжина: {len(court_decision_text) if court_decision_text else 0} символів). Будь ласка, перевірте вхідні дані.")
 
         if provider == ModelProvider.OPENAI.value:
-            # Use default OpenAI client settings for async compatibility in HF Spaces
-            client = OpenAI(api_key=OPENAI_API_KEY, timeout=120.0)
+            # Use custom httpx client to avoid async loop issues on HF Spaces
+            # This is critical for stable connection in threaded environments like Gradio
+            http_client = httpx.Client(
+                timeout=120.0,
+                transport=httpx.HTTPTransport(retries=3)
+            )
+            client = OpenAI(
+                api_key=OPENAI_API_KEY, 
+                http_client=http_client
+            )
             
             # Retry logic for connection errors
             max_retries = 3
@@ -714,13 +723,12 @@ def generate_legal_position(
                     completion_params["max_completion_tokens"] = MAX_TOKENS_CONFIG["openai"]
                 else:
                     completion_params["max_tokens"] = MAX_TOKENS_CONFIG["openai"]
-                
+                    completion_params["temperature"] = GENERATION_TEMPERATURE
+
                 # Handle thinking/reasoning
                 if thinking_enabled and is_reasoning_model:
                     completion_params["reasoning_effort"] = thinking_level.lower()
                     # Reasoning models usually don't support temperature or it must be 1.0
-                else:
-                    completion_params["temperature"] = GENERATION_TEMPERATURE
 
                 # Execute with retries
                 for attempt in range(max_retries):
@@ -761,8 +769,16 @@ def generate_legal_position(
                 }
 
         if provider == ModelProvider.DEEPSEEK.value:
-            # Use default client settings for async compatibility in HF Spaces
-            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com", timeout=120.0)
+            # Use custom httpx client for DeepSeek on HF Spaces
+            http_client = httpx.Client(
+                timeout=120.0,
+                transport=httpx.HTTPTransport(retries=3)
+            )
+            client = OpenAI(
+                api_key=DEEPSEEK_API_KEY, 
+                base_url="https://api.deepseek.com", 
+                http_client=http_client
+            )
             
             # Retry logic for DeepSeek
             max_retries = 3
