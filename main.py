@@ -279,13 +279,15 @@ class LLMAnalyzer:
         if provider == ModelProvider.OPENAI:
             if not OPENAI_API_KEY:
                 raise ValueError(f"OpenAI API key not configured. Please set OPENAI_API_KEY environment variable to use {provider.value} provider.")
-            # Use default httpx settings for better compatibility with async environments
-            self.client = openai.OpenAI(api_key=OPENAI_API_KEY, timeout=120.0)
+            # Disable HTTP/2 to avoid 421 Misdirected Request on HF Spaces
+            self._http_client = httpx.Client(timeout=httpx.Timeout(120.0, connect=30.0), http2=False)
+            self.client = openai.OpenAI(api_key=OPENAI_API_KEY, http_client=self._http_client)
         elif provider == ModelProvider.DEEPSEEK:
             if not DEEPSEEK_API_KEY:
                 raise ValueError(f"DeepSeek API key not configured. Please set DEEPSEEK_API_KEY environment variable to use {provider.value} provider.")
-            # Use default httpx settings for better compatibility with async environments
-            self.client = openai.OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com", timeout=120.0)
+            # Disable HTTP/2 for consistent connections
+            self._http_client = httpx.Client(timeout=httpx.Timeout(120.0, connect=30.0), http2=False)
+            self.client = openai.OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com", http_client=self._http_client)
         elif provider == ModelProvider.ANTHROPIC:
             if not ANTHROPIC_API_KEY:
                 raise ValueError(f"Anthropic API key not configured. Please set ANTHROPIC_API_KEY environment variable to use {provider.value} provider.")
@@ -682,12 +684,14 @@ def generate_legal_position(
             raise Exception(f"Текст судового рішення занадто короткий або відсутній (довжина: {len(court_decision_text) if court_decision_text else 0} символів). Будь ласка, перевірте вхідні дані.")
 
         if provider == ModelProvider.OPENAI.value:
-            # Use context-managed httpx client to avoid socket/fd leaks in threaded Gradio env
+            # Use custom httpx client with HTTP/2 disabled to avoid 421 Misdirected Request
+            # errors on HF Spaces (Cloudflare HTTP/2 connection coalescing issue)
             http_client = None
             response_text = None
             try:
                 http_client = httpx.Client(
                     timeout=httpx.Timeout(120.0, connect=30.0),
+                    http2=False,
                 )
                 client = OpenAI(
                     api_key=OPENAI_API_KEY, 
@@ -779,12 +783,13 @@ def generate_legal_position(
                         pass
 
         if provider == ModelProvider.DEEPSEEK.value:
-            # Use context-managed httpx client for DeepSeek to avoid socket/fd leaks
+            # Use custom httpx client with HTTP/2 disabled for consistent connections
             http_client = None
             response_text = None
             try:
                 http_client = httpx.Client(
                     timeout=httpx.Timeout(120.0, connect=30.0),
+                    http2=False,
                 )
                 client = OpenAI(
                     api_key=DEEPSEEK_API_KEY, 

@@ -83,12 +83,21 @@ def run_network_diagnostics():
     try:
         import httpx
         print(f"  httpx version: {httpx.__version__}")
+        # Test with default settings
         with httpx.Client(timeout=10) as client:
             resp = client.get("https://api.anthropic.com")
-            print(f"  ✅ httpx -> Anthropic HTTP {resp.status_code}")
-        with httpx.Client(timeout=10) as client:
+            print(f"  ✅ httpx (default) -> Anthropic HTTP {resp.status_code}")
+        # Test OpenAI with HTTP/2 disabled (avoids 421 Misdirected Request)
+        with httpx.Client(timeout=10, http2=False) as client:
             resp = client.get("https://api.openai.com")
-            print(f"  ✅ httpx -> OpenAI HTTP {resp.status_code}")
+            print(f"  ✅ httpx (http1.1) -> OpenAI HTTP {resp.status_code}")
+        # Also test with default HTTP/2 to compare
+        try:
+            with httpx.Client(timeout=10) as client:
+                resp = client.get("https://api.openai.com")
+                print(f"  ✅ httpx (default) -> OpenAI HTTP {resp.status_code}")
+        except Exception as e2:
+            print(f"  ⚠️ httpx (default/http2) -> OpenAI FAILED: {type(e2).__name__}: {e2}")
     except Exception as e:
         print(f"  ❌ httpx -> {type(e).__name__}: {e}")
     
