@@ -251,11 +251,11 @@ class LLMAnalyzer:
         if provider == ModelProvider.OPENAI:
             if not OPENAI_API_KEY:
                 raise ValueError(f"OpenAI API key not configured. Please set OPENAI_API_KEY environment variable to use {provider.value} provider.")
-            self.client = openai.OpenAI(api_key=OPENAI_API_KEY)
+            self.client = openai.OpenAI(api_key=OPENAI_API_KEY, timeout=120.0)
         elif provider == ModelProvider.DEEPSEEK:
             if not DEEPSEEK_API_KEY:
                 raise ValueError(f"DeepSeek API key not configured. Please set DEEPSEEK_API_KEY environment variable to use {provider.value} provider.")
-            self.client = openai.OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+            self.client = openai.OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com", timeout=120.0)
         elif provider == ModelProvider.ANTHROPIC:
             if not ANTHROPIC_API_KEY:
                 raise ValueError(f"Anthropic API key not configured. Please set ANTHROPIC_API_KEY environment variable to use {provider.value} provider.")
@@ -312,7 +312,23 @@ class LLMAnalyzer:
             if not is_reasoning_model:
                 completion_params["temperature"] = 0
 
-            response = self.client.chat.completions.create(**completion_params)
+            # Retry logic for OpenAI analysis
+            max_retries = 3
+            last_error = None
+            response = None
+            for attempt in range(max_retries):
+                try:
+                    print(f"[DEBUG] OpenAI Analysis call attempt {attempt + 1}/{max_retries}")
+                    response = self.client.chat.completions.create(**completion_params)
+                    break
+                except Exception as api_err:
+                    last_error = api_err
+                    print(f"[ERROR] OpenAI Analysis attempt {attempt + 1} failed: {type(api_err).__name__}: {str(api_err)}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2 ** attempt)
+                    else:
+                        raise last_error
+
             response_text = response.choices[0].message.content
             
             # Verify it's valid JSON
@@ -345,7 +361,23 @@ class LLMAnalyzer:
                 completion_params["response_format"] = {'type': 'json_object'}
                 completion_params["temperature"] = 0
 
-            response = self.client.chat.completions.create(**completion_params)
+            # Retry logic for DeepSeek analysis
+            max_retries = 3
+            last_error = None
+            response = None
+            for attempt in range(max_retries):
+                try:
+                    print(f"[DEBUG] DeepSeek Analysis call attempt {attempt + 1}/{max_retries}")
+                    response = self.client.chat.completions.create(**completion_params)
+                    break
+                except Exception as api_err:
+                    last_error = api_err
+                    print(f"[ERROR] DeepSeek Analysis attempt {attempt + 1} failed: {type(api_err).__name__}: {str(api_err)}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2 ** attempt)
+                    else:
+                        raise last_error
+
             response_text = response.choices[0].message.content
             
             # Verify and clean JSON
@@ -620,7 +652,14 @@ def generate_legal_position(
             raise Exception(f"Текст судового рішення занадто короткий або відсутній (довжина: {len(court_decision_text) if court_decision_text else 0} символів). Будь ласка, перевірте вхідні дані.")
 
         if provider == ModelProvider.OPENAI.value:
-            client = OpenAI(api_key=OPENAI_API_KEY)
+            # Increase timeout for complex models and HF Spaces environment
+            client = OpenAI(api_key=OPENAI_API_KEY, timeout=120.0)
+            
+            # Retry logic for connection errors
+            max_retries = 3
+            last_error = None
+            response = None
+            
             try:
                 print(f"[DEBUG] OpenAI Generation - Model: {model_name}")
                 
@@ -654,7 +693,23 @@ def generate_legal_position(
                 else:
                     completion_params["temperature"] = GENERATION_TEMPERATURE
 
-                response = client.chat.completions.create(**completion_params)
+                # Execute with retries
+                for attempt in range(max_retries):
+                    try:
+                        print(f"[DEBUG] OpenAI API call attempt {attempt + 1}/{max_retries}")
+                        response = client.chat.completions.create(**completion_params)
+                        break
+                    except Exception as api_err:
+                        last_error = api_err
+                        error_type = type(api_err).__name__
+                        print(f"[ERROR] OpenAI API attempt {attempt + 1} failed: {error_type}: {str(api_err)}")
+                        if attempt < max_retries - 1:
+                            wait_time = 2 ** attempt  # 1, 2, 4 seconds
+                            print(f"[DEBUG] Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            raise last_error
+
                 response_text = response.choices[0].message.content
                 print(f"[DEBUG] OpenAI response length: {len(response_text) if response_text else 0}")
                 
@@ -674,7 +729,14 @@ def generate_legal_position(
                 }
 
         if provider == ModelProvider.DEEPSEEK.value:
-            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+            # Increase timeout for DeepSeek API
+            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com", timeout=120.0)
+            
+            # Retry logic for DeepSeek
+            max_retries = 3
+            last_error = None
+            response = None
+            
             try:
                 print(f"[DEBUG] DeepSeek Generation - Model: {model_name}")
                 
@@ -699,7 +761,23 @@ def generate_legal_position(
                 if not is_reasoning:
                     completion_params["temperature"] = GENERATION_TEMPERATURE
 
-                response = client.chat.completions.create(**completion_params)
+                # Execute with retries
+                for attempt in range(max_retries):
+                    try:
+                        print(f"[DEBUG] DeepSeek API call attempt {attempt + 1}/{max_retries}")
+                        response = client.chat.completions.create(**completion_params)
+                        break
+                    except Exception as api_err:
+                        last_error = api_err
+                        error_type = type(api_err).__name__
+                        print(f"[ERROR] DeepSeek API attempt {attempt + 1} failed: {error_type}: {str(api_err)}")
+                        if attempt < max_retries - 1:
+                            wait_time = 2 ** attempt
+                            print(f"[DEBUG] Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            raise last_error
+
                 response_text = response.choices[0].message.content
                 print(f"[DEBUG] DeepSeek response length: {len(response_text) if response_text else 0}")
                 
