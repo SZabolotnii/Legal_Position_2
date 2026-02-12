@@ -684,11 +684,26 @@ def generate_legal_position(
             raise Exception(f"Текст судового рішення занадто короткий або відсутній (довжина: {len(court_decision_text) if court_decision_text else 0} символів). Будь ласка, перевірте вхідні дані.")
 
         if provider == ModelProvider.OPENAI.value:
-            # Use custom httpx client with HTTP/2 disabled to avoid 421 Misdirected Request
-            # errors on HF Spaces (Cloudflare HTTP/2 connection coalescing issue)
+            # Diagnostic: test raw httpx connection before using OpenAI SDK
             http_client = None
             response_text = None
             try:
+                print(f"[DEBUG] OpenAI pre-flight check...")
+                print(f"[DEBUG] openai SDK version: {openai.__version__}")
+                print(f"[DEBUG] httpx version: {httpx.__version__}")
+                print(f"[DEBUG] OPENAI_API_KEY length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
+                
+                # Quick raw httpx connectivity test to api.openai.com
+                try:
+                    with httpx.Client(timeout=10.0, http2=False) as test_client:
+                        test_resp = test_client.get("https://api.openai.com/v1/models",
+                                                     headers={"Authorization": f"Bearer {OPENAI_API_KEY[:20]}...truncated"})
+                        print(f"[DEBUG] Raw httpx test -> HTTP {test_resp.status_code}")
+                except Exception as pre_err:
+                    import traceback
+                    print(f"[WARNING] Raw httpx pre-flight failed: {type(pre_err).__name__}: {pre_err}")
+                    print(f"[WARNING] Pre-flight traceback: {traceback.format_exc()}")
+                
                 http_client = httpx.Client(
                     timeout=httpx.Timeout(120.0, connect=30.0),
                     http2=False,
@@ -697,6 +712,7 @@ def generate_legal_position(
                     api_key=OPENAI_API_KEY, 
                     http_client=http_client
                 )
+                print(f"[DEBUG] OpenAI client base_url: {client.base_url}")
                 
                 # Retry logic for connection errors
                 max_retries = 3
@@ -741,13 +757,19 @@ def generate_legal_position(
                         response = client.chat.completions.create(**completion_params)
                         break
                     except Exception as api_err:
+                        import traceback
                         last_error = api_err
                         error_type = type(api_err).__name__
                         error_detail = str(api_err)
-                        # Log underlying cause for connection errors
-                        if hasattr(api_err, '__cause__') and api_err.__cause__:
-                            error_detail += f" | Cause: {type(api_err.__cause__).__name__}: {api_err.__cause__}"
+                        # Walk the full exception chain
+                        cause = api_err.__cause__
+                        depth = 0
+                        while cause and depth < 5:
+                            error_detail += f"\n  -> Caused by [{depth}]: {type(cause).__name__}: {cause}"
+                            cause = getattr(cause, '__cause__', None) or getattr(cause, '__context__', None)
+                            depth += 1
                         print(f"[ERROR] OpenAI API attempt {attempt + 1} failed: {error_type}: {error_detail}")
+                        print(f"[ERROR] Full traceback:\n{traceback.format_exc()}")
                         if attempt < max_retries - 1:
                             wait_time = 2 ** attempt  # 1, 2, 4 seconds
                             print(f"[DEBUG] Retrying in {wait_time}s...")
