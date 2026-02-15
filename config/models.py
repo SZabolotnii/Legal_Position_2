@@ -70,7 +70,9 @@ class ModelRegistry:
                 return 'GPT4o_FT'
         
         # Handle specific models
-        if model_name == 'gpt-4.1':
+        if model_name == 'gpt-5.2':
+            return 'GPT5_2'
+        elif model_name == 'gpt-4.1':
             return 'GPT4_1'
         elif model_name == 'gpt-4o':
             return 'GPT4o'

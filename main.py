@@ -315,7 +315,7 @@ class LLMAnalyzer:
         """Analyze text using OpenAI."""
         # Determine model name and if it's a reasoning model
         model_val = self.model_name.value if hasattr(self.model_name, "value") else str(self.model_name)
-        is_reasoning_model = any(m in model_val.lower() for m in ["gpt-4.1", "gpt-4.5", "o1", "o3"])
+        is_reasoning_model = any(m in model_val.lower() for m in ["gpt-4.1", "gpt-4.5", "gpt-5", "o1", "o3"])
         
         # Use developer role for newer models
         role = "developer" if is_reasoning_model else "system"
@@ -343,6 +343,12 @@ class LLMAnalyzer:
             # Reasoning models usually require temperature=1.0 or none
             if not is_reasoning_model:
                 completion_params["temperature"] = 0
+            
+            # Add GPT-5.2 specific parameters
+            if "gpt-5" in model_val.lower():
+                completion_params["reasoning_effort"] = "medium"
+                completion_params["verbosity"] = "medium"
+                completion_params["store"] = False
 
             # Retry logic for OpenAI analysis
             max_retries = 3
@@ -721,8 +727,8 @@ def generate_legal_position(
                 
                 print(f"[DEBUG] OpenAI Generation - Model: {model_name}")
                 
-                # Check for reasoning models (gpt-4.1, o1, etc.)
-                is_reasoning_model = any(m in model_name.lower() for m in ["gpt-4.1", "gpt-4.5", "o1", "o3"])
+                # Check for reasoning models (gpt-4.1, gpt-5.2, o1, etc.)
+                is_reasoning_model = any(m in model_name.lower() for m in ["gpt-4.1", "gpt-4.5", "gpt-5", "o1", "o3"])
                 
                 # Use developer role for newer models, system for others
                 role = "developer" if is_reasoning_model else "system"
@@ -745,10 +751,16 @@ def generate_legal_position(
                     completion_params["max_tokens"] = MAX_TOKENS_CONFIG["openai"]
                     completion_params["temperature"] = GENERATION_TEMPERATURE
 
-                # Handle thinking/reasoning
+                # Handle thinking/reasoning for GPT-5.2 and other reasoning models
                 if thinking_enabled and is_reasoning_model:
-                    completion_params["reasoning_effort"] = thinking_level.lower()
-                    # Reasoning models usually don't support temperature or it must be 1.0
+                    # GPT-5.2 specific parameters
+                    if "gpt-5" in model_name.lower():
+                        completion_params["reasoning_effort"] = thinking_level.lower()
+                        completion_params["verbosity"] = "medium"  # Can be "low", "medium", "high"
+                        completion_params["store"] = False
+                    else:
+                        # For other reasoning models (gpt-4.1, o1, etc.)
+                        completion_params["reasoning_effort"] = thinking_level.lower()
 
                 # Execute with retries
                 for attempt in range(max_retries):

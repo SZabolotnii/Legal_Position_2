@@ -52,16 +52,24 @@ python_version: "3.11"
 ## 🎯 Підтримка AI провайдерів
 
 ### Для генерації:
-- **OpenAI**: GPT-4o, GPT-4.1, custom fine-tuned models
+- **OpenAI**: GPT-5.2 (NEW! з reasoning), GPT-4.1, GPT-4o, custom fine-tuned models
 - **Anthropic**: Claude 4.5 Sonnet (з підтримкою Extended Thinking)
 - **Google**: Gemini 3.0 Flash, 3.5 Flash (з підтримкою Thinking Mode)
 - **DeepSeek**: DeepSeek Chat
 
 ### Для аналізу:
-- **OpenAI**: GPT-4o, GPT-4.1
+- **OpenAI**: GPT-5.2 (NEW! з reasoning), GPT-4.1, GPT-4o
 - **Anthropic**: Claude 4.5 Sonnet
 - **Google**: Gemini 3.0 Flash, 3.5 Flash
 - **DeepSeek**: DeepSeek Chat
+
+### 🆕 GPT-5.2 - Нова модель з reasoning!
+- Покращене міркування для складних правових аналізів
+- Контроль рівня reasoning: low/medium/high
+- Налаштування деталізації відповідей
+- Конфіденційність: опція не зберігати запити
+
+📖 [Детальна документація GPT-5.2](GPT5_2_INTEGRATION.md) | [Швидкий старт](GPT5_2_QUICKSTART.md)
 
 ## 📋 Структура проекту
 
