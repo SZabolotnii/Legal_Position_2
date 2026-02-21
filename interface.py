@@ -44,7 +44,7 @@ def update_generation_model_choices(provider: str) -> gr.Dropdown:
     if provider == ModelProvider.OPENAI.value:
         return gr.Dropdown(
             choices=[m.value for m in GenerationModelName if m.value.startswith("ft:") or m.value.startswith("gpt")],
-            value=GenerationModelName.GPT4_1.value,
+            value=GenerationModelName.GPT5_2.value,
             label="Модель генерації"
         )
     if provider == ModelProvider.DEEPSEEK.value:
@@ -56,7 +56,7 @@ def update_generation_model_choices(provider: str) -> gr.Dropdown:
     elif provider == ModelProvider.ANTHROPIC.value:
         return gr.Dropdown(
             choices=[m.value for m in GenerationModelName if m.value.startswith("claude")],
-            value=GenerationModelName.CLAUDE_SONNET_4_5.value,
+            value=GenerationModelName.CLAUDE_SONNET_4_6.value,
             label="Модель генерації"
         )
     else:  # GEMINI
@@ -66,13 +66,14 @@ def update_generation_model_choices(provider: str) -> gr.Dropdown:
             label="Модель генерації"
         )
 
-def update_thinking_visibility(provider: str):
+def update_thinking_visibility(provider: str) -> gr.update:
     """Show/hide thinking controls based on provider."""
-    return gr.update(visible=(provider in [ModelProvider.GEMINI.value, ModelProvider.ANTHROPIC.value]))
+    return gr.update(visible=(provider in [ModelProvider.GEMINI.value, ModelProvider.ANTHROPIC.value, ModelProvider.OPENAI.value]))
 
 def update_thinking_level_interactive(thinking_enabled: bool) -> tuple:
     """Enable/disable thinking controls based on checkbox."""
     return (
+        gr.Dropdown(interactive=thinking_enabled),
         gr.Dropdown(interactive=thinking_enabled),
         gr.Slider(interactive=thinking_enabled)
     )
@@ -153,7 +154,7 @@ def update_analysis_model_choices(provider: str) -> gr.Dropdown:
     if provider == ModelProvider.OPENAI.value:
         return gr.Dropdown(
             choices=[m.value for m in AnalysisModelName if m.value.startswith("gpt")],
-            value=AnalysisModelName.GPT4_1.value,
+            value=AnalysisModelName.GPT5_2.value,
             label="Модель аналізу"
         )
     elif provider == ModelProvider.DEEPSEEK.value:
@@ -165,7 +166,7 @@ def update_analysis_model_choices(provider: str) -> gr.Dropdown:
     elif provider == ModelProvider.ANTHROPIC.value:
         return gr.Dropdown(
             choices=[m.value for m in AnalysisModelName if m.value.startswith("claude")],
-            value=AnalysisModelName.CLAUDE_SONNET_4_5.value,
+            value=AnalysisModelName.CLAUDE_SONNET_4_6.value,
             label="Модель аналізу"
         )
     else:  # GEMINI
@@ -185,8 +186,12 @@ async def process_input(
         provider: str,
         model_name: str,
         thinking_enabled: bool = False,
+        thinking_type: str = "Adaptive",
         thinking_level: str = "MEDIUM",
+        openai_verbosity: str = "medium",
         thinking_budget: int = 10000,
+        temperature: float = 0.5,
+        max_tokens: int = 4000,
         session_id: str = None
 ) -> Tuple[str, Optional[Dict[str, Any]], str]:
     """Process input and generate legal position."""
@@ -242,8 +247,12 @@ async def process_input(
             provider,
             model_name,
             thinking_enabled,
+            thinking_type,
             thinking_level,
+            openai_verbosity,
             thinking_budget,
+            temperature,
+            max_tokens,
             custom_system_prompt,
             custom_lp_prompt
         )
@@ -609,25 +618,52 @@ def create_gradio_interface() -> gr.Blocks:
                             )
                         
                         # Advanced Settings in Accordion to save space
-                        with gr.Accordion("⚙️ Додаткові параметри (Thinking Mode)", open=False) as thinking_accordion:
+                        with gr.Accordion("⚙️ Додаткові параметри", open=False) as thinking_accordion:
+                            with gr.Row():
+                                generation_temp_slider = gr.Slider(
+                                    minimum=0.0,
+                                    maximum=2.0,
+                                    value=0.5,
+                                    step=0.1,
+                                    label="Температура генерації (креативність)"
+                                )
+                                generation_max_tokens_slider = gr.Slider(
+                                    minimum=512,
+                                    maximum=32768,
+                                    value=4000,
+                                    step=512,
+                                    label="Max Tokens (ліміт відповіді)"
+                                )
                             thinking_enabled_checkbox = gr.Checkbox(
                                 label="Увімкнути режим Thinking (глибокий аналіз)",
                                 value=False,
-                                info="Активує розширений ланцюг міркувань для моделей Gemini 3+ та Claude 4.5"
+                                info="Активує розширений ланцюг міркувань (Gemini 3+, Claude 4.5/4.6)"
                             )
                             with gr.Row():
-                                thinking_level_dropdown = gr.Dropdown(
-                                    choices=["Minimal", "Low", "Medium", "High"],
-                                    value="Medium",
-                                    label="Рівень Thinking (Gemini)",
+                                thinking_type_dropdown = gr.Dropdown(
+                                    choices=["Adaptive", "Enabled"],
+                                    value="Adaptive",
+                                    label="Тип Thinking (Claude)",
                                     interactive=False
                                 )
+                                thinking_level_dropdown = gr.Dropdown(
+                                    choices=["none", "low", "medium", "high", "xhigh"],
+                                    value="medium",
+                                    label="Рівень Thinking (OpenAI/Gemini)",
+                                    interactive=False
+                                )
+                                openai_verbosity_dropdown = gr.Dropdown(
+                                    choices=["low", "medium", "high"],
+                                    value="medium",
+                                    label="Verbosity (OpenAI GPT-5)",
+                                    interactive=True
+                                )
                                 thinking_budget_slider = gr.Slider(
-                                    minimum=1000,
-                                    maximum=20000,
+                                    minimum=1024,
+                                    maximum=32000,
                                     value=10000,
-                                    step=1000,
-                                    label="Бюджет токенів (Claude)",
+                                    step=1024,
+                                    label="Бюджет токенів (Claude 4.5)",
                                     interactive=False
                                 )
                     
@@ -722,6 +758,22 @@ def create_gradio_interface() -> gr.Blocks:
                         label="Модель аналізу",
                         scale=1
                     )
+                with gr.Accordion("⚙️ Налаштування аналізу", open=False):
+                    with gr.Row():
+                        analysis_temp_slider = gr.Slider(
+                            minimum=0.0,
+                            maximum=2.0,
+                            value=0.5,
+                            step=0.1,
+                            label="Температура аналізу"
+                        )
+                        analysis_max_tokens_slider = gr.Slider(
+                            minimum=512,
+                            maximum=32768,
+                            value=4000,
+                            step=512,
+                            label="Max Tokens (ліміт відповіді)"
+                        )
 
                 question_input = gr.Textbox(
                     label="Уточнююче питання для аналізу",
@@ -930,7 +982,7 @@ def create_gradio_interface() -> gr.Blocks:
         thinking_enabled_checkbox.change(
             fn=update_thinking_level_interactive,
             inputs=[thinking_enabled_checkbox],
-            outputs=[thinking_level_dropdown, thinking_budget_slider]
+            outputs=[thinking_type_dropdown, thinking_level_dropdown, thinking_budget_slider]
         )
 
         # generation and analysis
@@ -945,8 +997,12 @@ def create_gradio_interface() -> gr.Blocks:
                 generation_provider_dropdown,
                 generation_model_dropdown,
                 thinking_enabled_checkbox,
+                thinking_type_dropdown,
                 thinking_level_dropdown,
+                openai_verbosity_dropdown,
                 thinking_budget_slider,
+                generation_temp_slider,
+                generation_max_tokens_slider,
                 session_id_state
             ],
             outputs=[position_output, state_lp_json, session_id_state]
@@ -983,7 +1039,9 @@ def create_gradio_interface() -> gr.Blocks:
                 question_input,
                 state_nodes,
                 analysis_provider_dropdown,
-                analysis_model_dropdown
+                analysis_model_dropdown,
+                analysis_temp_slider,
+                analysis_max_tokens_slider
             ],
             outputs=analysis_output
         )

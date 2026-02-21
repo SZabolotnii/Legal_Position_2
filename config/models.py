@@ -69,23 +69,22 @@ class ModelRegistry:
                 # Generic fine-tuned model
                 return 'GPT4o_FT'
         
-        # Handle specific models
         if model_name == 'gpt-5.2':
             return 'GPT5_2'
+        elif model_name == 'gpt-5-mini':
+            return 'GPT5_MINI'
         elif model_name == 'gpt-4.1':
             return 'GPT4_1'
         elif model_name == 'gpt-4o':
             return 'GPT4o'
         elif model_name == 'gpt-4o-mini':
             return 'GPT4o_MINI'
-        elif model_name == 'claude-3-7-sonnet-20250219':
-            return 'CLAUDE_SONNET_3_7'
-        elif model_name == 'claude-opus-4-5-20251101':
-            return 'CLAUDE_OPUS_4_5'
+        elif model_name == 'claude-opus-4-6':
+            return 'CLAUDE_OPUS_4_6'
+        elif model_name == 'claude-sonnet-4-6':
+            return 'CLAUDE_SONNET_4_6'
         elif model_name == 'claude-haiku-4-5-20251001':
             return 'CLAUDE_HAIKU_4_5'
-        elif model_name == 'claude-sonnet-4-5-20250929':
-            return 'CLAUDE_SONNET_4_5'
         elif model_name == 'gemini-3-flash-preview':
             return 'GEMINI_3_FLASH'
         elif model_name == 'gemini-3-pro-preview':

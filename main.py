@@ -272,9 +272,11 @@ class RetrieverEvent(Event):
 class LLMAnalyzer:
     """Class for handling different LLM providers."""
 
-    def __init__(self, provider: Any, model_name: Any):
+    def __init__(self, provider: Any, model_name: Any, temperature: float = GENERATION_TEMPERATURE, max_tokens: Optional[int] = None):
         self.provider = provider
         self.model_name = model_name
+        self.temperature = temperature
+        self.max_tokens = max_tokens
 
         if provider == ModelProvider.OPENAI:
             if not OPENAI_API_KEY:
@@ -342,7 +344,7 @@ class LLMAnalyzer:
             
             # Reasoning models usually require temperature=1.0 or none
             if not is_reasoning_model:
-                completion_params["temperature"] = 0
+                completion_params["temperature"] = self.temperature
             
             # Add GPT-5.2 specific parameters
             if "gpt-5" in model_val.lower():
@@ -397,7 +399,7 @@ class LLMAnalyzer:
             # Use JSON mode and temperature only for non-reasoning models
             if not is_reasoning:
                 completion_params["response_format"] = {'type': 'json_object'}
-                completion_params["temperature"] = 0
+                completion_params["temperature"] = self.temperature
 
             # Retry logic for DeepSeek analysis
             max_retries = 3
@@ -429,7 +431,8 @@ class LLMAnalyzer:
         try:
             response = self.client.messages.create(
                 model=self.model_name,
-                max_tokens=MAX_TOKENS_ANALYSIS,
+                max_tokens=self.max_tokens or MAX_TOKENS_ANALYSIS,
+                temperature=self.temperature,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -473,8 +476,8 @@ class LLMAnalyzer:
             ]
             
             generate_content_config = types.GenerateContentConfig(
-                temperature=GENERATION_TEMPERATURE,
-                max_output_tokens=MAX_TOKENS_ANALYSIS,
+                temperature=self.temperature,
+                max_output_tokens=self.max_tokens or MAX_TOKENS_ANALYSIS,
                 system_instruction=[
                     types.Part.from_text(text=SYSTEM_PROMPT),
                 ],
@@ -529,9 +532,11 @@ class PrecedentAnalysisWorkflow(Workflow):
     """Workflow for analyzing legal precedents."""
 
     def __init__(self, provider: Any = ModelProvider.OPENAI,
-                 model_name: Any = AnalysisModelName.GPT4o_MINI):
+                 model_name: Any = AnalysisModelName.GPT4o_MINI,
+                 temperature: float = GENERATION_TEMPERATURE,
+                 max_tokens: Optional[int] = None):
         super().__init__()
-        self.analyzer = LLMAnalyzer(provider, model_name)
+        self.analyzer = LLMAnalyzer(provider, model_name, temperature, max_tokens)
 
     @step
     async def analyze(self, ctx: Context, ev: StartEvent) -> StopEvent:
@@ -612,8 +617,12 @@ def generate_legal_position(
         provider: str,
         model_name: str,
         thinking_enabled: bool = False,
+        thinking_type: str = "Adaptive",
         thinking_level: str = "MEDIUM",
+        openai_verbosity: str = "medium",
         thinking_budget: int = 10000,
+        temperature: float = GENERATION_TEMPERATURE,
+        max_tokens: Optional[int] = None,
         custom_system_prompt: Optional[str] = None,
         custom_lp_prompt: Optional[str] = None
 ) -> Dict:
@@ -746,17 +755,17 @@ def generate_legal_position(
                 
                 # Set tokens based on model capabilities
                 if is_reasoning_model:
-                    completion_params["max_completion_tokens"] = MAX_TOKENS_CONFIG["openai"]
+                    completion_params["max_completion_tokens"] = max_tokens or MAX_TOKENS_CONFIG["openai"]
                 else:
-                    completion_params["max_tokens"] = MAX_TOKENS_CONFIG["openai"]
-                    completion_params["temperature"] = GENERATION_TEMPERATURE
+                    completion_params["max_tokens"] = max_tokens or MAX_TOKENS_CONFIG["openai"]
+                    completion_params["temperature"] = temperature
 
                 # Handle thinking/reasoning for GPT-5.2 and other reasoning models
                 if thinking_enabled and is_reasoning_model:
                     # GPT-5.2 specific parameters
                     if "gpt-5" in model_name.lower():
                         completion_params["reasoning_effort"] = thinking_level.lower()
-                        completion_params["verbosity"] = "medium"  # Can be "low", "medium", "high"
+                        completion_params["verbosity"] = openai_verbosity.lower()
                         completion_params["store"] = False
                     else:
                         # For other reasoning models (gpt-4.1, o1, etc.)
@@ -848,16 +857,15 @@ def generate_legal_position(
                     messages.append({"role": "user", "content": combined_content})
                 else:
                     messages.append({"role": "system", "content": system_prompt})
-                    messages.append({"role": "user", "content": content})
-
                 completion_params = {
                     "model": model_name,
                     "messages": messages,
-                    "max_tokens": MAX_TOKENS_CONFIG["deepseek"],
+                    "max_tokens": max_tokens or MAX_TOKENS_CONFIG["deepseek"],
+                    "frequency_penalty": 0.0,
                 }
                 
                 if not is_reasoning:
-                    completion_params["temperature"] = GENERATION_TEMPERATURE
+                    completion_params["temperature"] = temperature
 
                 # Execute with retries
                 for attempt in range(max_retries):
@@ -919,18 +927,25 @@ def generate_legal_position(
             # Prepare message creation parameters
             message_params = {
                 "model": model_name,
-                "max_tokens": MAX_TOKENS_CONFIG["anthropic"],
+                "max_tokens": max_tokens or MAX_TOKENS_CONFIG["anthropic"],
                 "system": system_prompt,
                 "messages": messages,
-                "temperature": GENERATION_TEMPERATURE
+                "temperature": temperature
             }
 
-            # Add thinking config if enabled (only for Claude 4.5+ models)
-            if thinking_enabled and "claude" in model_name.lower() and "-4-5-" in model_name:
-                message_params["thinking"] = {
-                    "type": "enabled",
-                    "budget_tokens": int(thinking_budget)
-                }
+            # Add thinking config if enabled
+            if thinking_enabled and "claude" in model_name.lower():
+                # For Claude 4.6 models, we can use Adaptive
+                if thinking_type.lower() == "adaptive" and getattr(model_name, "find", lambda x: -1)("-4-6") != -1:
+                    message_params["thinking"] = {"type": "adaptive"}
+                    message_params["temperature"] = 1.0
+                else:
+                    # 'Enabled' type works for both 4.5 and 4.6 models
+                    message_params["thinking"] = {
+                        "type": "enabled",
+                        "budget_tokens": max(1024, int(thinking_budget))
+                    }
+                    message_params["temperature"] = 1.0
 
             # Retry logic for connection errors
             max_retries = 3
@@ -1029,8 +1044,8 @@ def generate_legal_position(
                 
                 # Build config based on model version
                 config_params = {
-                    "temperature": GENERATION_TEMPERATURE,
-                    "max_output_tokens": MAX_TOKENS_CONFIG["gemini"],
+                    "temperature": temperature,
+                    "max_output_tokens": max_tokens or MAX_TOKENS_CONFIG["gemini"],
                     "system_instruction": [
                         types.Part.from_text(text=system_prompt),
                     ],
@@ -1207,13 +1222,17 @@ async def analyze_action(
         question: str,
         nodes: List[NodeWithScore],
         provider: str,
-        model_name: str
+        model_name: str,
+        temperature: float = GENERATION_TEMPERATURE,
+        max_tokens: Optional[int] = None
 ) -> str:
     """Analyze search results using AI."""
     try:
         workflow = PrecedentAnalysisWorkflow(
             provider=ModelProvider(provider),
-            model_name=AnalysisModelName(model_name)
+            model_name=AnalysisModelName(model_name),
+            temperature=temperature,
+            max_tokens=max_tokens
         )
 
         query = (

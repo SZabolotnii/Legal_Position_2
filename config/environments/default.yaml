@@ -23,10 +23,10 @@ llama_index:
 # Generation Settings
 generation:
   max_tokens:
-    openai: 2048
-    anthropic: 2048
-    gemini: 2048
-    deepseek: 2048
+    openai: 8192
+    anthropic: 16000
+    gemini: 8192
+    deepseek: 8192
   max_tokens_analysis: 4000
   temperature: 0.5
 
@@ -46,6 +46,9 @@ models:
     openai:
       - name: "gpt-5.2"
         display_name: "GPT-5.2"
+        default: true
+      - name: "gpt-5-mini"
+        display_name: "GPT-5 Mini"
       - name: "gpt-4.1"
         display_name: "GPT-4.1"
       - name: "ft:gpt-4o-mini-2024-07-18:personal:lp-1700-part-cd-120:AqhCe5Aq"
@@ -54,13 +57,13 @@ models:
         display_name: "GPT-4o Mini FT2"
 
     anthropic:
-      - name: "claude-opus-4-5-20251101"
-        display_name: "Claude Opus 4.5"
+      - name: "claude-opus-4-6"
+        display_name: "Claude Opus 4.6"
+      - name: "claude-sonnet-4-6"
+        display_name: "Claude Sonnet 4.6"
+        default: true
       - name: "claude-haiku-4-5-20251001"
         display_name: "Claude Haiku 4.5"
-      - name: "claude-sonnet-4-5-20250929"
-        display_name: "Claude Sonnet 4.5"
-        default: true
 
     gemini:
       - name: "gemini-3-flash-preview"
@@ -77,6 +80,8 @@ models:
     openai:
       - name: "gpt-5.2"
         display_name: "GPT-5.2"
+      - name: "gpt-5-mini"
+        display_name: "GPT-5 Mini"
       - name: "gpt-4.1"
         display_name: "GPT-4.1"
       - name: "gpt-4o"
@@ -85,14 +90,13 @@ models:
         display_name: "GPT-4o Mini"
 
     anthropic:
-      - name: "claude-3-7-sonnet-20250219"
-        display_name: "Claude 3.7 Sonnet"
-      - name: "claude-opus-4-5-20251101"
-        display_name: "Claude Opus 4.5"
+      - name: "claude-opus-4-6"
+        display_name: "Claude Opus 4.6"
+      - name: "claude-sonnet-4-6"
+        display_name: "Claude Sonnet 4.6"
+        default: true
       - name: "claude-haiku-4-5-20251001"
         display_name: "Claude Haiku 4.5"
-      - name: "claude-sonnet-4-5-20250929"
-        display_name: "Claude Sonnet 4.5"
 
     gemini:
       - name: "gemini-3-flash-preview"
