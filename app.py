@@ -12,6 +12,18 @@ from pathlib import Path
 warnings.filterwarnings("ignore", message=".*Invalid file descriptor.*")
 logging.getLogger("asyncio").setLevel(logging.CRITICAL)
 
+# Suppress "Exception ignored in: BaseEventLoop.__del__" on HF Spaces shutdown
+# warnings.filterwarnings does NOT catch these — they go via sys.unraisablehook
+_original_unraisablehook = sys.unraisablehook
+
+def _suppress_asyncio_fd_errors(unraisable):
+    if (unraisable.exc_type is ValueError and
+            "Invalid file descriptor" in str(unraisable.exc_value)):
+        return  # silently ignore
+    _original_unraisablehook(unraisable)
+
+sys.unraisablehook = _suppress_asyncio_fd_errors
+
 # Set environment for Hugging Face Spaces
 os.environ['GRADIO_SERVER_NAME'] = '0.0.0.0'
 os.environ['GRADIO_SERVER_PORT'] = '7860'
