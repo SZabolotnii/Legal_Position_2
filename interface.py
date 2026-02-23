@@ -988,6 +988,13 @@ def create_gradio_interface() -> gr.Blocks:
 
         # generation and analysis
         generate_position_button.click(
+            fn=lambda: (
+                gr.update(value="⏳ **Генерація правової позиції...**\n\nЗапит відправлено до AI. Зачекайте, це може зайняти кілька секунд."),
+                gr.update(interactive=False)
+            ),
+            inputs=None,
+            outputs=[position_output, generate_position_button]
+        ).then(
             fn=process_input,
             inputs=[
                 text_input,
@@ -1008,9 +1015,9 @@ def create_gradio_interface() -> gr.Blocks:
             ],
             outputs=[position_output, state_lp_json, session_id_state]
         ).then(
-            fn=lambda: gr.update(interactive=True),
+            fn=lambda: (gr.update(interactive=True), gr.update(interactive=True)),
             inputs=None,
-            outputs=search_with_ai_button
+            outputs=[generate_position_button, search_with_ai_button]
         )
 
         search_with_ai_button.click(
