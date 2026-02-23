@@ -833,7 +833,8 @@ def create_gradio_interface() -> gr.Blocks:
                     save_prompts_button = gr.Button(
                         "💾 Зберегти промпти",
                         variant="primary",
-                        scale=1
+                        scale=1,
+                        interactive=False
                     )
                     reset_prompts_button = gr.Button(
                         "🔄 Скинути до стандартних",
@@ -1047,6 +1048,15 @@ def create_gradio_interface() -> gr.Blocks:
         )
 
         # Settings tab event handlers
+
+        # Enable save button when any prompt is changed
+        for editor in [system_prompt_editor, lp_prompt_editor, analysis_prompt_editor]:
+            editor.change(
+                fn=lambda: gr.update(interactive=True),
+                inputs=None,
+                outputs=[save_prompts_button]
+            )
+
         save_prompts_button.click(
             fn=save_custom_prompts,
             inputs=[
@@ -1056,6 +1066,10 @@ def create_gradio_interface() -> gr.Blocks:
                 analysis_prompt_editor
             ],
             outputs=[prompts_status, session_id_state]
+        ).then(
+            fn=lambda: gr.update(interactive=False),
+            inputs=None,
+            outputs=[save_prompts_button]
         )
 
         reset_prompts_button.click(
@@ -1068,6 +1082,10 @@ def create_gradio_interface() -> gr.Blocks:
                 prompts_status,
                 session_id_state
             ]
+        ).then(
+            fn=lambda: gr.update(interactive=False),
+            inputs=None,
+            outputs=[save_prompts_button]
         )
 
         # Batch testing tab event handlers
