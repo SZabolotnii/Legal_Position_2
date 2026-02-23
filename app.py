@@ -119,6 +119,16 @@ def run_network_diagnostics():
 
 # Import and launch interface
 from interface import create_gradio_interface
+from main import initialize_components
+
+# Initialize search components at module level (required for HF Spaces)
+# On HF Spaces, __main__ block never runs, so this must be called here.
+print("Initializing search components...")
+_init_ok = initialize_components()
+if _init_ok:
+    print("Search components initialized successfully!")
+else:
+    print("[WARNING] Search components initialization failed. Search functionality will be limited.")
 
 # Create Gradio interface (at module level for HF Spaces)
 demo = create_gradio_interface()
