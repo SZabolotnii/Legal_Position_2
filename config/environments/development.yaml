@@ -3,6 +3,7 @@
 app:
   debug: true
   environment: "development"
+  debug_prompts: true
 
 # AWS S3 Configuration - use local files in development
 aws:

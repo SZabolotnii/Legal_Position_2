@@ -5,6 +5,7 @@ app:
   version: "1.0.0"
   debug: false
   environment: "production"
+  debug_prompts: false
 
 # AWS S3 Configuration
 aws:

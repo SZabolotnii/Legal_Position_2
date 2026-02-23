@@ -13,6 +13,7 @@ class AppConfig(BaseModel):
     version: str
     debug: bool
     environment: str
+    debug_prompts: bool = False
 
 
 class AWSConfig(BaseModel):

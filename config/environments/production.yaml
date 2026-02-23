@@ -3,6 +3,7 @@
 app:
   debug: false
   environment: "production"
+  debug_prompts: false
 
 # AWS S3 Configuration - use production index
 aws:

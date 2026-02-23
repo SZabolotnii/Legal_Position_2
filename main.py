@@ -35,6 +35,7 @@ from config import (
     GENERATION_TEMPERATURE,
     LEGAL_POSITION_SCHEMA,
     REQUIRED_FILES,
+    DEBUG_PROMPTS,
     ModelProvider,
     AnalysisModelName,
     DEEPSEEK_API_KEY,
@@ -49,6 +50,26 @@ from utils import (
     extract_json_from_text
 )
 from embeddings import GeminiEmbedding
+
+# ============ Debug Prompt Logging ============
+# DEBUG_PROMPTS is loaded from config (YAML env setting + DEBUG_PROMPTS env var override).
+_PROMPT_SEP = "=" * 80
+
+
+def _log_prompt(provider: str, model: str, system: str, user: str) -> None:
+    """Print full system + user prompts when DEBUG_PROMPTS is enabled."""
+    if not DEBUG_PROMPTS:
+        return
+    print(f"\n{_PROMPT_SEP}")
+    print(f"[PROMPT DEBUG] Provider: {provider} | Model: {model}")
+    print(f"{_PROMPT_SEP}")
+    if system:
+        print("[PROMPT DEBUG] ── SYSTEM PROMPT ──────────────────────────────────")
+        print(system)
+    print("[PROMPT DEBUG] ── USER PROMPT ────────────────────────────────────")
+    print(user)
+    print(f"{_PROMPT_SEP}\n")
+# ============ End Debug Prompt Logging ============
 
 # Initialize embedding model and settings BEFORE importing components
 # Priority: OpenAI > Gemini > None
@@ -352,6 +373,9 @@ class LLMAnalyzer:
                 completion_params["verbosity"] = "medium"
                 completion_params["store"] = False
 
+            # Log full prompts in debug mode
+            _log_prompt("openai-analyzer", model_val, SYSTEM_PROMPT, prompt)
+
             # Retry logic for OpenAI analysis
             max_retries = 3
             last_error = None
@@ -401,6 +425,12 @@ class LLMAnalyzer:
                 completion_params["response_format"] = {'type': 'json_object'}
                 completion_params["temperature"] = self.temperature
 
+            # Log full prompts in debug mode
+            if is_reasoning:
+                _log_prompt("deepseek-analyzer", model_val, "", f"{SYSTEM_PROMPT}\n\n{prompt}")
+            else:
+                _log_prompt("deepseek-analyzer", model_val, SYSTEM_PROMPT, prompt)
+
             # Retry logic for DeepSeek analysis
             max_retries = 3
             last_error = None
@@ -429,6 +459,7 @@ class LLMAnalyzer:
     async def _analyze_with_anthropic(self, prompt: str, response_schema: dict) -> str:
         """Analyze text using Anthropic."""
         try:
+            _log_prompt("anthropic-analyzer", str(self.model_name), SYSTEM_PROMPT, prompt)
             response = self.client.messages.create(
                 model=self.model_name,
                 max_tokens=self.max_tokens or MAX_TOKENS_ANALYSIS,
@@ -464,6 +495,9 @@ class LLMAnalyzer:
             """
 
             formatted_prompt = f"{prompt}\n\n{json_instruction}"
+
+            # Log full prompts in debug mode
+            _log_prompt("gemini-analyzer", str(self.model_name), SYSTEM_PROMPT, formatted_prompt)
 
             # Use new google.genai API
             contents = [
@@ -771,6 +805,9 @@ def generate_legal_position(
                         # For other reasoning models (gpt-4.1, o1, etc.)
                         completion_params["reasoning_effort"] = thinking_level.lower()
 
+                # Log full prompts in debug mode
+                _log_prompt("openai", model_name, system_prompt, content)
+
                 # Execute with retries
                 for attempt in range(max_retries):
                     try:
@@ -867,6 +904,12 @@ def generate_legal_position(
                 if not is_reasoning:
                     completion_params["temperature"] = temperature
 
+                # Log full prompts in debug mode
+                if is_reasoning:
+                    _log_prompt("deepseek", model_name, "", combined_content)
+                else:
+                    _log_prompt("deepseek", model_name, system_prompt, content)
+
                 # Execute with retries
                 for attempt in range(max_retries):
                     try:
@@ -946,6 +989,9 @@ def generate_legal_position(
                         "budget_tokens": max(1024, int(thinking_budget))
                     }
                     message_params["temperature"] = 1.0
+
+            # Log full prompts in debug mode
+            _log_prompt("anthropic", model_name, system_prompt, content)
 
             # Retry logic for connection errors
             max_retries = 3
@@ -1062,6 +1108,9 @@ def generate_legal_position(
                 #     config_params["response_mime_type"] = "application/json"
                 
                 generate_content_config = types.GenerateContentConfig(**config_params)
+
+                # Log full prompts in debug mode
+                _log_prompt("gemini", model_name, system_prompt, content)
 
                 response = client.models.generate_content(
                     model=model_name,

@@ -156,6 +156,11 @@ else:
         }
     }
 
+# Debug prompt logging - env var overrides YAML setting
+_debug_prompts_yaml = _get_settings_attr('app.debug_prompts', False)
+_debug_prompts_env = os.getenv("DEBUG_PROMPTS", "").lower() in ("1", "true", "yes")
+DEBUG_PROMPTS: bool = _debug_prompts_env or bool(_debug_prompts_yaml)
+
 # Required files - from YAML
 REQUIRED_FILES = _get_settings_attr('required_files', [
     'docstore_es_filter.json',
@@ -233,6 +238,7 @@ __all__ = [
     'GENERATION_TEMPERATURE',
     'LEGAL_POSITION_SCHEMA',
     'REQUIRED_FILES',
+    'DEBUG_PROMPTS',
     'ModelProvider',
     'GenerationModelName',
     'AnalysisModelName',
