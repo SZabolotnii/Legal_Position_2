@@ -638,6 +638,9 @@ class PrecedentAnalysisWorkflow(Workflow):
                         position_text = f"* [{position['source_index']}] {position['description']}  "
                         response_lines.append(position_text)
 
+                    if not response_lines:
+                        return StopEvent(result="Жодної релевантної правової позиції у базі не знайдено.")
+
                     response_text = "\n".join(response_lines)
                     return StopEvent(result=response_text)
                 else:

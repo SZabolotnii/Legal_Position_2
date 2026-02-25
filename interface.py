@@ -1025,8 +1025,8 @@ def create_gradio_interface() -> gr.Blocks:
             inputs=[state_lp_json],
             outputs=[search_output, state_nodes]
         ).then(
-            fn=lambda: gr.update(interactive=True),
-            inputs=None,
+            fn=lambda nodes: gr.update(interactive=nodes is not None),
+            inputs=[state_nodes],
             outputs=analyze_button
         )
 
@@ -1035,8 +1035,8 @@ def create_gradio_interface() -> gr.Blocks:
             inputs=[text_input, url_input, file_input, input_method_state, state_lp_json],
             outputs=[search_output, state_nodes, state_lp_json]
         ).then(
-            fn=lambda: gr.update(interactive=True),
-            inputs=None,
+            fn=lambda nodes: gr.update(interactive=nodes is not None),
+            inputs=[state_nodes],
             outputs=analyze_button
         )
 
