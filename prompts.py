@@ -18,14 +18,6 @@ LEGAL_POSITION_PROMPT = """
 правових позицій Верховного Суду (lpd.court.gov.ua).
 </task>
 
-<court_decision>
-{court_decision_text}
-</court_decision>
-
-<comment>
-{comment}
-</comment>
-
 <strategy>
 Постанова Верховного Суду має типову структуру. Для формулювання правової позиції
 зосередься ВИКЛЮЧНО на розділах:
@@ -149,6 +141,14 @@ LEGAL_POSITION_PROMPT = """
   "category": "Досудове врегулювання господарських спорів"
 }}
 </output_format>
+
+<court_decision>
+{court_decision_text}
+</court_decision>
+
+<comment>
+{comment}
+</comment>
 
 """
 

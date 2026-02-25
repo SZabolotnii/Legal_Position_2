@@ -166,30 +166,32 @@ def download_s3_folder(bucket_name: str, prefix: str, local_dir: Path) -> None:
 
 def initialize_components() -> bool:
     """Initialize all necessary components for the application."""
+    from index_loader import load_indexes_with_fallback
     try:
         # Create local directory if it doesn't exist
         LOCAL_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Download index files from S3 only if S3 client is available and local files don't exist
+        # Check if required files are present
         missing_files = [f for f in REQUIRED_FILES if not (LOCAL_DIR / f).exists()]
-        
+
         if missing_files:
-            if s3_client:
-                print("Some required files are missing locally. Attempting to download from S3...")
-                download_s3_folder(BUCKET_NAME, PREFIX_RETRIEVER, LOCAL_DIR)
-            else:
-                print(f"Warning: Missing required files and no S3 client available: {', '.join(missing_files)}")
-                print(f"Checking if files exist in {LOCAL_DIR}...")
+            print(f"Missing index files: {', '.join(missing_files)}")
+            print(f"Attempting to load indexes via fallback (local → HF Dataset → S3)...")
+            indexes_ok = load_indexes_with_fallback(str(LOCAL_DIR))
+            if not indexes_ok:
+                # Last resort: try S3 directly if client is available
+                if s3_client:
+                    print("Fallback failed, trying S3 directly...")
+                    download_s3_folder(BUCKET_NAME, PREFIX_RETRIEVER, LOCAL_DIR)
+                else:
+                    print(f"Warning: No S3 client and fallback failed for: {', '.join(missing_files)}")
         else:
             print(f"All required files found locally in {LOCAL_DIR}")
 
-        if not LOCAL_DIR.exists():
-            raise FileNotFoundError(f"Directory not found: {LOCAL_DIR}")
-
-        # Check for required files again
+        # Final check
         missing_files = [f for f in REQUIRED_FILES if not (LOCAL_DIR / f).exists()]
         if missing_files:
-            raise FileNotFoundError(f"Missing required files: {', '.join(missing_files)}")
+            raise FileNotFoundError(f"Missing required files after all attempts: {', '.join(missing_files)}")
 
         # Initialize search components if any embedding model is available
         if embed_model:
@@ -394,7 +396,13 @@ class LLMAnalyzer:
                         raise last_error
 
             response_text = response.choices[0].message.content
-            
+
+            # Log cache hit stats (automatic caching, no config needed)
+            if hasattr(response, 'usage') and hasattr(response.usage, 'prompt_tokens_details'):
+                cached = getattr(response.usage.prompt_tokens_details, 'cached_tokens', 0)
+                total = response.usage.prompt_tokens
+                print(f"[CACHE] OpenAI analysis: {cached}/{total} input tokens from cache")
+
             # Verify it's valid JSON
             json_data = extract_json_from_text(response_text)
             return json.dumps(json_data, ensure_ascii=False) if json_data else response_text
@@ -465,7 +473,8 @@ class LLMAnalyzer:
                 max_tokens=self.max_tokens or MAX_TOKENS_ANALYSIS,
                 temperature=self.temperature,
                 system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
+                cache_control={"type": "ephemeral"}
             )
             response_text = response.content[0].text
             
@@ -837,6 +846,12 @@ def generate_legal_position(
 
                 response_text = response.choices[0].message.content
                 print(f"[DEBUG] OpenAI response length: {len(response_text) if response_text else 0}")
+
+                # Log cache hit stats (automatic caching, no config needed)
+                if hasattr(response, 'usage') and hasattr(response.usage, 'prompt_tokens_details'):
+                    cached = getattr(response.usage.prompt_tokens_details, 'cached_tokens', 0)
+                    total = response.usage.prompt_tokens
+                    print(f"[CACHE] OpenAI generation: {cached}/{total} input tokens from cache")
                 
                 json_response = extract_json_from_text(response_text)
                 if json_response:
@@ -973,7 +988,8 @@ def generate_legal_position(
                 "max_tokens": max_tokens or MAX_TOKENS_CONFIG["anthropic"],
                 "system": system_prompt,
                 "messages": messages,
-                "temperature": temperature
+                "temperature": temperature,
+                "cache_control": {"type": "ephemeral"}
             }
 
             # Add thinking config if enabled
