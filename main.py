@@ -472,9 +472,8 @@ class LLMAnalyzer:
                 model=self.model_name,
                 max_tokens=self.max_tokens or MAX_TOKENS_ANALYSIS,
                 temperature=self.temperature,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
-                cache_control={"type": "ephemeral"}
+                system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+                messages=[{"role": "user", "content": prompt}]
             )
             response_text = response.content[0].text
             
@@ -986,10 +985,9 @@ def generate_legal_position(
             message_params = {
                 "model": model_name,
                 "max_tokens": max_tokens or MAX_TOKENS_CONFIG["anthropic"],
-                "system": system_prompt,
+                "system": [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
                 "messages": messages,
-                "temperature": temperature,
-                "cache_control": {"type": "ephemeral"}
+                "temperature": temperature
             }
 
             # Add thinking config if enabled
