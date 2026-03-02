@@ -20,9 +20,26 @@ def clean_text(text: str) -> str:
     }
 
     try:
+        # Normalize to NFKD and handle character replacements
         text = unicodedata.normalize('NFKD', text)
+        # Handle character replacements
         for old, new in replacements.items():
             text = text.replace(old, new)
+
+        # Remove HTML tags and entities
+        # Specifically targeting </p> <p> and other remnants
+        text = re.sub(r'</p>\s*<p>', ' ', text, flags=re.IGNORECASE)
+        text = re.sub(r'<[^>]+>', ' ', text)
+        
+        # Handle common HTML entities
+        entities = {
+            '&nbsp;': ' ', '&quot;': '"', '&amp;': '&', 
+            '&lt;': '<', '&gt;': '>', '&apos;': "'"
+        }
+        for ent, rep in entities.items():
+            text = text.replace(ent, rep)
+
+        # Remove control characters and normalize whitespace
         text = ' '.join(text.split())
         text = ''.join(char for char in text
                       if not unicodedata.category(char).startswith('C'))

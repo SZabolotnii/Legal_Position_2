@@ -52,3 +52,6 @@ logs/
 
 # Ігноруємо isolated проєкти (якщо вони є в репозиторії)
 isolated-lp-generation/
+
+# Ігноруємо тестові файли
+data_test/

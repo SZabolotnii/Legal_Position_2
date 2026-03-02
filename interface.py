@@ -333,28 +333,47 @@ async def process_raw_text_search(text, url, file, method, state_lp_json):
 
 
 # Batch testing functions
-async def load_csv_file(file) -> Tuple[str, Optional[pd.DataFrame]]:
-    """Load CSV file and validate it has a 'text' column."""
+async def load_data_file(file) -> Tuple[str, Optional[pd.DataFrame]]:
+    """Load CSV or Excel file and validate it has a 'text' column."""
     try:
         if file is None:
             return "Помилка: Файл не вибрано", None
 
-        # Try to read CSV with different encodings
-        try:
-            df = pd.read_csv(file.name, encoding='utf-8')
-        except UnicodeDecodeError:
+        file_path = Path(file.name)
+        file_ext = file_path.suffix.lower()
+
+        if file_ext in ['.xlsx', '.xls']:
             try:
-                df = pd.read_csv(file.name, encoding='cp1251')
+                # Read Excel
+                df = pd.read_excel(file.name)
             except Exception as e:
-                return f"Помилка читання CSV: {str(e)}", None
+                return f"Помилка читання Excel: {str(e)}", None
+        else:
+            # Try to read CSV with different encodings and automatic separator detection
+            encodings = ['utf-8-sig', 'utf-8', 'cp1251', 'latin1']
+            df = None
+            last_error = ""
+
+            for enc in encodings:
+                try:
+                    # Use sep=None, engine='python' for automatic separator detection
+                    # Use on_bad_lines='warn' to skip problematic lines if they occur
+                    df = pd.read_csv(file.name, sep=None, engine='python', encoding=enc, on_bad_lines='warn')
+                    break
+                except Exception as e:
+                    last_error = str(e)
+                    continue
+
+            if df is None:
+                return f"Помилка читання CSV: {last_error}", None
 
         # Validate 'text' column exists
         if 'text' not in df.columns:
-            return f"Помилка: CSV файл повинен містити колонку 'text'. Знайдені колонки: {', '.join(df.columns)}", None
+            return f"Помилка: Файл повинен містити колонку 'text'. Знайдені колонки: {', '.join(df.columns)}", None
 
         # Show preview
         rows_count = len(df)
-        preview_msg = f"✅ Файл завантажено успішно!\n\n**Кількість рядків:** {rows_count}\n\n**Колонки:** {', '.join(df.columns)}\n\n**Перші 3 рядки (текст):**\n"
+        preview_msg = f"✅ Файл {file_path.name} завантажено успішно!\n\n**Кількість рядків:** {rows_count}\n\n**Колонки:** {', '.join(df.columns)}\n\n**Перші 3 рядки (текст):**\n"
         for idx, row in df.head(3).iterrows():
             text_preview = str(row['text'])[:100] + "..." if len(str(row['text'])) > 100 else str(row['text'])
             preview_msg += f"\n{idx + 1}. {text_preview}\n"
@@ -849,18 +868,17 @@ def create_gradio_interface() -> gr.Blocks:
 
             # Вкладка Пакетне тестування (Batch Testing)
             with gr.Tab("📊 Пакетне тестування", id=4):
-                gr.Markdown("### Пакетна генерація правових позицій з CSV файлу", elem_classes=["tab-header"])
+                gr.Markdown("### Пакетна генерація правових позицій з CSV/Excel файлу", elem_classes=["tab-header"])
 
                 gr.Markdown("""
                 **Інструкція:**
                 1. Виберіть провайдера AI та модель для генерації
-                2. Завантажте CSV файл, що містить колонку `text` з текстами судових рішень
+                2. Завантажте CSV або Excel (.xlsx, .xls) файл, що містить колонку `text` з текстами судових рішень
                 3. Запустіть пакетне тестування
-                4. Завантажте результати у форматі CSV
+                4. Завантажте результати у форматі CSV (результати завжди зберігаються як CSV для сумісності)
 
-                **Формат CSV файлу:**
-                - Обов'язково повинна бути колонка `text` з текстами судових рішень
-                - Результати будуть збережені в новій колонці з назвою моделі
+                **Вимоги до файлу:**
+                - Обов'язково повинна бути колонка `text` з текстами рішень
                 """)
 
                 with gr.Row():
@@ -887,8 +905,8 @@ def create_gradio_interface() -> gr.Blocks:
                 )
 
                 csv_file_input = gr.File(
-                    label="📁 Завантажте CSV файл з тестовими даними",
-                    file_types=[".csv"],
+                    label="📁 Завантажте CSV або Excel файл з тестовими даними",
+                    file_types=[".csv", ".xlsx", ".xls"],
                     type="filepath"
                 )
 
@@ -901,7 +919,7 @@ def create_gradio_interface() -> gr.Blocks:
                 batch_df_state = gr.State()
 
                 load_csv_button = gr.Button(
-                    "📂 Завантажити CSV файл",
+                    "📂 Завантажити CSV/XLSX файл",
                     variant="secondary",
                     scale=1
                 )
@@ -1097,7 +1115,7 @@ def create_gradio_interface() -> gr.Blocks:
 
         # Batch testing tab event handlers
         load_csv_button.click(
-            fn=load_csv_file,
+            fn=load_data_file,
             inputs=[csv_file_input],
             outputs=[csv_preview_output, batch_df_state]
         ).then(
