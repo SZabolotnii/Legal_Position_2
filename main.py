@@ -995,17 +995,30 @@ def generate_legal_position(
 
             # Add thinking config if enabled
             if thinking_enabled and "claude" in model_name.lower():
-                # For Claude 4.6 models, we can use Adaptive
-                if thinking_type.lower() == "adaptive" and getattr(model_name, "find", lambda x: -1)("-4-6") != -1:
-                    message_params["thinking"] = {"type": "adaptive"}
-                    message_params["temperature"] = 1.0
+                # Claude Haiku typically does not support thinking mode
+                if "haiku" in model_name.lower():
+                    print(f"[WARNING] Thinking mode is not supported for Haiku models. Disabling thinking for {model_name}.")
                 else:
-                    # 'Enabled' type works for both 4.5 and 4.6 models
-                    message_params["thinking"] = {
-                        "type": "enabled",
-                        "budget_tokens": max(1024, int(thinking_budget))
-                    }
-                    message_params["temperature"] = 1.0
+                    # For Claude 4.6 models, we can use Adaptive
+                    if thinking_type.lower() == "adaptive" and "-4-6" in str(model_name).lower():
+                        message_params["thinking"] = {"type": "adaptive"}
+                        message_params["temperature"] = 1.0
+                    else:
+                        # 'Enabled' type works for both 4.5 and 4.6 models
+                        budget = max(1024, int(thinking_budget))
+                        
+                        # Anthropic REQUIRES max_tokens > budget_tokens.
+                        # If the user sets a low max_tokens (e.g. 4000) and high budget (10000), it will fail.
+                        if message_params["max_tokens"] <= budget:
+                            recommended_max = budget + 4000
+                            print(f"[WARNING] max_tokens ({message_params['max_tokens']}) is <= thinking_budget ({budget}). Increasing max_tokens to {recommended_max}.")
+                            message_params["max_tokens"] = recommended_max
+
+                        message_params["thinking"] = {
+                            "type": "enabled",
+                            "budget_tokens": budget
+                        }
+                        message_params["temperature"] = 1.0
 
             # Log full prompts in debug mode
             _log_prompt("anthropic", model_name, system_prompt, content)
