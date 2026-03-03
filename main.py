@@ -71,6 +71,42 @@ def _log_prompt(provider: str, model: str, system: str, user: str) -> None:
     print(f"{_PROMPT_SEP}\n")
 # ============ End Debug Prompt Logging ============
 
+# ============ OpenAI Reasoning Helpers ============
+# Valid reasoning_effort values accepted by the OpenAI API
+_OPENAI_EFFORT_MAP = {
+    "none":   None,    # omit the parameter (model uses its own default)
+    "low":    "low",
+    "medium": "medium",
+    "high":   "high",
+    "xhigh":  "high",  # UI-only level, maps to highest valid API value
+}
+
+
+def _build_openai_reasoning_params(
+    model_name: str,
+    thinking_level: str = "medium",
+    openai_verbosity: str = "medium",
+) -> dict:
+    """Return extra completion params for OpenAI reasoning-capable models.
+
+    - reasoning_effort: mapped from thinking_level with UI→API value normalisation.
+    - verbosity: only for models that support it (gpt-5.* and o3*).
+    - store: always False so conversations are not stored in OpenAI history.
+    """
+    params: dict = {}
+
+    effort = _OPENAI_EFFORT_MAP.get(thinking_level.lower(), "medium")
+    if effort is not None:
+        params["reasoning_effort"] = effort
+
+    model_lower = model_name.lower()
+    if "gpt-5" in model_lower or model_lower.startswith("o3"):
+        params["verbosity"] = openai_verbosity.lower()
+
+    params["store"] = False
+    return params
+# ============ End OpenAI Reasoning Helpers ============
+
 # Initialize embedding model and settings BEFORE importing components
 # Priority: OpenAI > Gemini > None
 embed_model = None
@@ -295,11 +331,16 @@ class RetrieverEvent(Event):
 class LLMAnalyzer:
     """Class for handling different LLM providers."""
 
-    def __init__(self, provider: Any, model_name: Any, temperature: float = GENERATION_TEMPERATURE, max_tokens: Optional[int] = None):
+    def __init__(self, provider: Any, model_name: Any, temperature: float = GENERATION_TEMPERATURE,
+                 max_tokens: Optional[int] = None, thinking_enabled: bool = False,
+                 thinking_level: str = "medium", openai_verbosity: str = "medium"):
         self.provider = provider
         self.model_name = model_name
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.thinking_enabled = thinking_enabled
+        self.thinking_level = thinking_level
+        self.openai_verbosity = openai_verbosity
 
         if provider == ModelProvider.OPENAI:
             if not OPENAI_API_KEY:
@@ -368,12 +409,12 @@ class LLMAnalyzer:
             # Reasoning models usually require temperature=1.0 or none
             if not is_reasoning_model:
                 completion_params["temperature"] = self.temperature
-            
-            # Add GPT-5.2 specific parameters
-            if "gpt-5" in model_val.lower():
-                completion_params["reasoning_effort"] = "medium"
-                completion_params["verbosity"] = "medium"
-                completion_params["store"] = False
+
+            # Add reasoning parameters only when thinking is explicitly enabled
+            if is_reasoning_model and self.thinking_enabled:
+                completion_params.update(
+                    _build_openai_reasoning_params(model_val, self.thinking_level, self.openai_verbosity)
+                )
 
             # Log full prompts in debug mode
             _log_prompt("openai-analyzer", model_val, SYSTEM_PROMPT, prompt)
@@ -576,9 +617,13 @@ class PrecedentAnalysisWorkflow(Workflow):
     def __init__(self, provider: Any = ModelProvider.OPENAI,
                  model_name: Any = AnalysisModelName.GPT4o_MINI,
                  temperature: float = GENERATION_TEMPERATURE,
-                 max_tokens: Optional[int] = None):
+                 max_tokens: Optional[int] = None,
+                 thinking_enabled: bool = False,
+                 thinking_level: str = "medium",
+                 openai_verbosity: str = "medium"):
         super().__init__()
-        self.analyzer = LLMAnalyzer(provider, model_name, temperature, max_tokens)
+        self.analyzer = LLMAnalyzer(provider, model_name, temperature, max_tokens,
+                                    thinking_enabled, thinking_level, openai_verbosity)
 
     @step
     async def analyze(self, ctx: Context, ev: StartEvent) -> StopEvent:
@@ -805,16 +850,11 @@ def generate_legal_position(
                     completion_params["max_tokens"] = max_tokens or MAX_TOKENS_CONFIG["openai"]
                     completion_params["temperature"] = temperature
 
-                # Handle thinking/reasoning for GPT-5.2 and other reasoning models
-                if thinking_enabled and is_reasoning_model:
-                    # GPT-5.2 specific parameters
-                    if "gpt-5" in model_name.lower():
-                        completion_params["reasoning_effort"] = thinking_level.lower()
-                        completion_params["verbosity"] = openai_verbosity.lower()
-                        completion_params["store"] = False
-                    else:
-                        # For other reasoning models (gpt-4.1, o1, etc.)
-                        completion_params["reasoning_effort"] = thinking_level.lower()
+                # Add reasoning parameters only when thinking is explicitly enabled by the user
+                if is_reasoning_model and thinking_enabled:
+                    completion_params.update(
+                        _build_openai_reasoning_params(model_name, thinking_level, openai_verbosity)
+                    )
 
                 # Log full prompts in debug mode
                 _log_prompt("openai", model_name, system_prompt, content)
@@ -1309,7 +1349,10 @@ async def analyze_action(
         provider: str,
         model_name: str,
         temperature: float = GENERATION_TEMPERATURE,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        thinking_enabled: bool = False,
+        thinking_level: str = "medium",
+        openai_verbosity: str = "medium"
 ) -> str:
     """Analyze search results using AI."""
     try:
@@ -1317,7 +1360,10 @@ async def analyze_action(
             provider=ModelProvider(provider),
             model_name=AnalysisModelName(model_name),
             temperature=temperature,
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
+            thinking_enabled=thinking_enabled,
+            thinking_level=thinking_level,
+            openai_verbosity=openai_verbosity
         )
 
         query = (
