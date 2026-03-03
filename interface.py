@@ -389,6 +389,13 @@ async def process_batch_testing(
     provider: str,
     model_name: str,
     delay_seconds: float = 1.0,
+    thinking_enabled: bool = False,
+    thinking_type: str = "Adaptive",
+    thinking_level: str = "medium",
+    openai_verbosity: str = "medium",
+    thinking_budget: int = 10000,
+    temperature: float = 0.5,
+    max_tokens: int = 4000,
     progress=gr.Progress()
 ) -> Tuple[str, Optional[str]]:
     """Process batch testing of legal position generation."""
@@ -418,7 +425,14 @@ async def process_batch_testing(
                     input_type="text",
                     comment_input="",
                     provider=provider,
-                    model_name=model_name
+                    model_name=model_name,
+                    thinking_enabled=thinking_enabled,
+                    thinking_type=thinking_type,
+                    thinking_level=thinking_level,
+                    openai_verbosity=openai_verbosity,
+                    thinking_budget=thinking_budget,
+                    temperature=temperature,
+                    max_tokens=max_tokens
                 )
 
                 # Store full JSON result
@@ -453,6 +467,7 @@ async def process_batch_testing(
         success_msg = f"✅ **Пакетне тестування завершено!**\n\n"
         success_msg += f"**Оброблено рядків:** {total_rows}\n"
         success_msg += f"**Модель:** {model_name}\n"
+        success_msg += f"**Температура:** {temperature} | **Max Tokens:** {max_tokens}\n"
         success_msg += f"**Результати збережено в:** {output_path}\n\n"
         success_msg += f"**Нова колонка:** {result_column_name}\n"
 
@@ -886,14 +901,66 @@ def create_gradio_interface() -> gr.Blocks:
                         choices=_available_providers,
                         value=_default_provider,
                         label="Провайдер AI",
+                        container=False,
                         scale=1
                     )
                     batch_model_dropdown = gr.Dropdown(
                         choices=_gen_models,
                         value=_default_gen_model,
                         label="Модель генерації",
-                        scale=1
+                        container=False,
+                        scale=2
                     )
+
+                # Advanced Settings Accordion (mirrors Generation tab)
+                with gr.Accordion("⚙️ Додаткові параметри", open=False) as batch_thinking_accordion:
+                    with gr.Row():
+                        batch_temp_slider = gr.Slider(
+                            minimum=0.0,
+                            maximum=2.0,
+                            value=0.5,
+                            step=0.1,
+                            label="Температура генерації (креативність)"
+                        )
+                        batch_max_tokens_slider = gr.Slider(
+                            minimum=512,
+                            maximum=32768,
+                            value=4000,
+                            step=512,
+                            label="Max Tokens (ліміт відповіді)"
+                        )
+                    batch_thinking_enabled_checkbox = gr.Checkbox(
+                        label="Увімкнути режим Thinking (глибокий аналіз)",
+                        value=False,
+                        info="Активує розширений ланцюг міркувань (Gemini 3+, Claude 4.5/4.6)"
+                    )
+                    with gr.Row():
+                        batch_thinking_type_dropdown = gr.Dropdown(
+                            choices=["Adaptive", "Enabled"],
+                            value="Adaptive",
+                            label="Тип Thinking (Claude)",
+                            interactive=False
+                        )
+                        batch_thinking_level_dropdown = gr.Dropdown(
+                            choices=["none", "low", "medium", "high", "xhigh"],
+                            value="medium",
+                            label="Рівень Thinking (OpenAI/Gemini)",
+                            interactive=False
+                        )
+                        batch_openai_verbosity_dropdown = gr.Dropdown(
+                            choices=["low", "medium", "high"],
+                            value="medium",
+                            label="Verbosity (OpenAI GPT-5)",
+                            interactive=True
+                        )
+                        batch_thinking_budget_slider = gr.Slider(
+                            minimum=1024,
+                            maximum=32000,
+                            value=10000,
+                            step=1024,
+                            label="Бюджет токенів (Claude 4.5)",
+                            interactive=False
+                        )
 
                 delay_slider = gr.Slider(
                     minimum=0,
@@ -937,7 +1004,14 @@ def create_gradio_interface() -> gr.Blocks:
                 )
 
                 download_results_file = gr.File(
-                    label="📥 Завантажити результати",
+                    label="📥 Завантажити результати (CSV)",
+                    visible=False,
+                    interactive=False
+                )
+
+                download_results_btn = gr.DownloadButton(
+                    label="⬇️ Вигрузити результати",
+                    variant="secondary",
                     visible=False
                 )
 
@@ -991,7 +1065,7 @@ def create_gradio_interface() -> gr.Blocks:
             outputs=[batch_model_dropdown]
         )
 
-        # thinking mode settings
+        # thinking mode settings — Generation tab
         generation_provider_dropdown.change(
             fn=update_thinking_visibility,
             inputs=[generation_provider_dropdown],
@@ -1002,6 +1076,19 @@ def create_gradio_interface() -> gr.Blocks:
             fn=update_thinking_level_interactive,
             inputs=[thinking_enabled_checkbox],
             outputs=[thinking_type_dropdown, thinking_level_dropdown, thinking_budget_slider]
+        )
+
+        # thinking mode settings — Batch Testing tab
+        batch_provider_dropdown.change(
+            fn=update_thinking_visibility,
+            inputs=[batch_provider_dropdown],
+            outputs=[batch_thinking_accordion]
+        )
+
+        batch_thinking_enabled_checkbox.change(
+            fn=update_thinking_level_interactive,
+            inputs=[batch_thinking_enabled_checkbox],
+            outputs=[batch_thinking_type_dropdown, batch_thinking_level_dropdown, batch_thinking_budget_slider]
         )
 
         # generation and analysis
@@ -1124,19 +1211,42 @@ def create_gradio_interface() -> gr.Blocks:
             outputs=[start_batch_button]
         )
 
+        # Internal state to keep the output file path
+        batch_result_path_state = gr.State()
+
         start_batch_button.click(
+            fn=lambda: (
+                gr.update(value="⏳ **Пакетне тестування запущено...**\n\nОбробка рядків. Зачекайте, будь ласка."),
+                gr.update(interactive=False),
+                gr.update(visible=False),
+                gr.update(visible=False)
+            ),
+            inputs=None,
+            outputs=[batch_output, start_batch_button, download_results_file, download_results_btn]
+        ).then(
             fn=process_batch_testing,
             inputs=[
                 batch_df_state,
                 batch_provider_dropdown,
                 batch_model_dropdown,
-                delay_slider
+                delay_slider,
+                batch_thinking_enabled_checkbox,
+                batch_thinking_type_dropdown,
+                batch_thinking_level_dropdown,
+                batch_openai_verbosity_dropdown,
+                batch_thinking_budget_slider,
+                batch_temp_slider,
+                batch_max_tokens_slider
             ],
-            outputs=[batch_output, download_results_file]
+            outputs=[batch_output, batch_result_path_state]
         ).then(
-            fn=lambda output_path: gr.update(visible=output_path is not None, value=output_path),
-            inputs=[download_results_file],
-            outputs=[download_results_file]
+            fn=lambda output_path: (
+                gr.update(interactive=True),
+                gr.update(visible=output_path is not None, value=output_path),
+                gr.update(visible=output_path is not None, value=output_path)
+            ),
+            inputs=[batch_result_path_state],
+            outputs=[start_batch_button, download_results_file, download_results_btn]
         )
 
         # Removed app.load call to avoid startup race condition with session state
