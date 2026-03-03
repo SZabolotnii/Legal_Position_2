@@ -999,6 +999,16 @@ def generate_legal_position(
                 if thinking_type.lower() == "adaptive" and "-4-6" in str(model_name).lower():
                     message_params["thinking"] = {"type": "adaptive"}
                     message_params["temperature"] = 1.0
+                    
+                    # Map thinking_level to valid effort
+                    t_lv = thinking_level.lower()
+                    if t_lv == "xhigh":
+                        effort = "max"
+                    elif t_lv in ["low", "medium", "high"]:
+                        effort = t_lv
+                    else:
+                        effort = "medium"
+                    message_params["output_config"] = {"effort": effort}
                 else:
                     # 'Enabled' type works for both 4.5 and 4.6 models
                     budget = max(1024, int(thinking_budget))
