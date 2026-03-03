@@ -459,7 +459,8 @@ async def process_batch_testing(
         output_dir.mkdir(exist_ok=True)
 
         timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-        output_filename = f"batch_test_results_{model_name}_{timestamp}.csv"
+        thinking_tag = "_thinking" if thinking_enabled else ""
+        output_filename = f"batch_test_results_{model_name}{thinking_tag}_{timestamp}.csv"
         output_path = output_dir / output_filename
 
         df.to_csv(output_path, index=False, encoding='utf-8')
