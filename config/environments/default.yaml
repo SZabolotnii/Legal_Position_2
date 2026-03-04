@@ -45,9 +45,11 @@ models:
   # Generation Models
   generation:
     openai:
+      - name: "gpt-5.3-chat-latest"
+        display_name: "GPT-5.3 Chat Latest"
+        default: true
       - name: "gpt-5.2"
         display_name: "GPT-5.2"
-        default: true
       - name: "gpt-5-mini"
         display_name: "GPT-5 Mini"
       - name: "gpt-4.1"
@@ -79,6 +81,8 @@ models:
   # Analysis Models
   analysis:
     openai:
+      - name: "gpt-5.3-chat-latest"
+        display_name: "GPT-5.3 Chat Latest"
       - name: "gpt-5.2"
         display_name: "GPT-5.2"
       - name: "gpt-5-mini"

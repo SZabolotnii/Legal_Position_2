@@ -69,7 +69,9 @@ class ModelRegistry:
                 # Generic fine-tuned model
                 return 'GPT4o_FT'
         
-        if model_name == 'gpt-5.2':
+        if model_name == 'gpt-5.3-chat-latest':
+            return 'GPT5_3_CHAT_LATEST'
+        elif model_name == 'gpt-5.2':
             return 'GPT5_2'
         elif model_name == 'gpt-5-mini':
             return 'GPT5_MINI'

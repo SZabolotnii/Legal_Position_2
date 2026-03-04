@@ -97,6 +97,9 @@ def _build_openai_reasoning_params(
 
     effort = _OPENAI_EFFORT_MAP.get(thinking_level.lower(), "medium")
     if effort is not None:
+        # gpt-5.3-chat-latest supports only "medium" for reasoning_effort
+        if "gpt-5.3" in model_name.lower() and effort != "medium":
+            effort = "medium"
         params["reasoning_effort"] = effort
 
     model_lower = model_name.lower()
