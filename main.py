@@ -38,6 +38,7 @@ from config import (
     DEBUG_PROMPTS,
     ModelProvider,
     AnalysisModelName,
+    DEFAULT_ANALYSIS_MODEL,
     DEEPSEEK_API_KEY,
     validate_environment
 )
@@ -618,13 +619,16 @@ class PrecedentAnalysisWorkflow(Workflow):
     """Workflow for analyzing legal precedents."""
 
     def __init__(self, provider: Any = ModelProvider.OPENAI,
-                 model_name: Any = AnalysisModelName.GPT4o_MINI,
+                 model_name: Any = None,
                  temperature: float = GENERATION_TEMPERATURE,
                  max_tokens: Optional[int] = None,
                  thinking_enabled: bool = False,
                  thinking_level: str = "medium",
                  openai_verbosity: str = "medium"):
         super().__init__()
+        # Use default analysis model if not specified
+        if model_name is None:
+            model_name = DEFAULT_ANALYSIS_MODEL or AnalysisModelName.GPT5_2
         self.analyzer = LLMAnalyzer(provider, model_name, temperature, max_tokens,
                                     thinking_enabled, thinking_level, openai_verbosity)
 
