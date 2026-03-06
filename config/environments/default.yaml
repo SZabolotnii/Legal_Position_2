@@ -45,9 +45,11 @@ models:
   # Generation Models
   generation:
     openai:
+- name: "gpt-5.4"
+        display_name: "GPT-5.4"
+        default: true
       - name: "gpt-5.3-chat-latest"
         display_name: "GPT-5.3 Chat Latest"
-        default: true
       - name: "gpt-5.2"
         display_name: "GPT-5.2"
       - name: "gpt-5-mini"
