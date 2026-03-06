@@ -47,15 +47,10 @@ models:
     openai:
       - name: "gpt-5.4"
         display_name: "GPT-5.4"
-        default: true
       - name: "gpt-5.3-chat-latest"
         display_name: "GPT-5.3 Chat Latest"
       - name: "gpt-5.2"
         display_name: "GPT-5.2"
-      - name: "gpt-5-mini"
-        display_name: "GPT-5 Mini"
-      - name: "gpt-4.1"
-        display_name: "GPT-4.1"
       - name: "ft:gpt-4o-mini-2024-07-18:personal:lp-1700-part-cd-120:AqhCe5Aq"
         display_name: "GPT-4o Mini FT1"
       - name: "ft:gpt-4o-mini-2024-07-18:personal:legal-position-1700:AbNt5I2x"
@@ -83,18 +78,13 @@ models:
   # Analysis Models
   analysis:
     openai:
+      - name: "gpt-5.4"
+        display_name: "GPT-5.4"
       - name: "gpt-5.3-chat-latest"
         display_name: "GPT-5.3 Chat Latest"
       - name: "gpt-5.2"
         display_name: "GPT-5.2"
-      - name: "gpt-5-mini"
-        display_name: "GPT-5 Mini"
-      - name: "gpt-4.1"
-        display_name: "GPT-4.1"
-      - name: "gpt-4o"
-        display_name: "GPT-4o"
-      - name: "gpt-4o-mini"
-        display_name: "GPT-4o Mini"
+
 
     anthropic:
       - name: "claude-opus-4-6"
