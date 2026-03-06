@@ -418,6 +418,13 @@ async def process_batch_testing(
 
             court_decision_text = str(row['text'])
 
+            # Skip rows where cell values match column names — these are duplicate header rows
+            col_values = {str(col): str(row[col]) for col in row.index}
+            header_matches = sum(1 for col, val in col_values.items() if val == col)
+            if header_matches >= max(1, len(col_values) // 2):
+                results.append("ПРОПУЩЕНО: рядок містить назви колонок (дублікат заголовка)")
+                continue
+
             # Generate legal position
             try:
                 legal_position_json = generate_legal_position(

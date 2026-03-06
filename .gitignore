@@ -55,6 +55,7 @@ isolated-lp-generation/
 
 # Ігноруємо тестові файли
 data_test/
+tests_data/
 
 # Ігноруємо додані документи
 Add_docs/
