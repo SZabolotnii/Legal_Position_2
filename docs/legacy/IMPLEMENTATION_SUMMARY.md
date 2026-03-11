@@ -148,7 +148,7 @@ async def process_input(..., session_id: str) -> Tuple[str, Dict, str]:
    - Життєвий цикл сесії
    - Порівняння до/після
 
-4. **[CHANGES.md](CHANGES.md)** (500+ рядків)
+4. **[CHANGES.md](../changelog/CHANGES.md)** (500+ рядків)
    - Детальний changelog
    - Список всіх змінених файлів
    - Технічні деталі
@@ -453,7 +453,7 @@ python main.py
 
 1. **[docs/PROMPT_EDITING.md](docs/PROMPT_EDITING.md)** - Технічна документація
 2. **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Архітектурні схеми
-3. **[CHANGES.md](CHANGES.md)** - Детальний changelog
+3. **[CHANGES.md](../changelog/CHANGES.md)** - Детальний changelog
 
 ### Для DevOps
 

@@ -24,7 +24,7 @@
 - [x] Написано швидкий старт (QUICK_START_PROMPTS.md)
 - [x] Створено архітектурну схему (ARCHITECTURE.md)
 - [x] Оновлено README.md з детальною інформацією
-- [x] Створено CHANGES.md з повним changelog
+- [x] Створено docs/changelog/CHANGES.md з повним changelog
 
 ### Можливі покращення в майбутньому:
 

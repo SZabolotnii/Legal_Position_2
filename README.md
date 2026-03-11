@@ -79,7 +79,7 @@ python_version: "3.11"
 - Налаштування деталізації відповідей
 - Конфіденційність: опція не зберігати запити
 
-📖 [Детальна документація GPT-5.2](GPT5_2_INTEGRATION.md) | [Швидкий старт](GPT5_2_QUICKSTART.md)
+📖 [Детальна документація GPT-5.2](docs/models/openai/GPT5_2_INTEGRATION.md) | [Швидкий старт](docs/models/openai/GPT5_2_QUICKSTART.md)
 
 ## 📋 Структура проекту
 
@@ -111,9 +111,8 @@ Legal_Position_2/
 │
 ├── test_results/                # Результати пакетного тестування
 │
-├── BATCH_TESTING_README.md      # Документація пакетного тестування
-├── HELP.md                      # Загальна допомога для користувачів
-└── CHANGES.md                   # Детальний changelog
+├── HELP.md                      # Загальна допомога для користувачів (використовується інтерфейсом)
+└── docs/                        # Документація (див. docs/README.md)
 ```
 
 ## 🛠️ Встановлення
@@ -208,7 +207,7 @@ python main.py
 
 **Формат результатів:** Повний JSON об'єкт з полями `title`, `text`, `proceeding`, `category`
 
-Детальна інструкція: [BATCH_TESTING_README.md](BATCH_TESTING_README.md)
+Детальна інструкція: [docs/batch/BATCH_TESTING_README.md](docs/batch/BATCH_TESTING_README.md)
 
 ### 📖 Допомога
 
@@ -370,10 +369,10 @@ gunicorn main:app --workers 4 --bind 0.0.0.0:7860
 ## 📚 Документація
 
 - **[HELP.md](HELP.md)** - Загальна допомога для користувачів (доступна в додатку)
-- **[BATCH_TESTING_README.md](BATCH_TESTING_README.md)** - Документація пакетного тестування
+- **[docs/batch/BATCH_TESTING_README.md](docs/batch/BATCH_TESTING_README.md)** - Документація пакетного тестування
 - **[PROMPT_EDITING.md](docs/PROMPT_EDITING.md)** - Повна технічна документація з редагування промптів
 - **[QUICK_START_PROMPTS.md](docs/QUICK_START_PROMPTS.md)** - Швидкий старт для користувачів
-- **[CHANGES.md](CHANGES.md)** - Детальний changelog версії 2.0
+- **[docs/changelog/CHANGES.md](docs/changelog/CHANGES.md)** - Детальний changelog
 
 ## 🔧 Troubleshooting
 

@@ -277,7 +277,7 @@ else:
     print("Warning: No embedding API key found (OpenAI or Gemini). Search functionality will be disabled.")
 ```
 
-Детальна документація: [GEMINI_EMBEDDINGS.md](GEMINI_EMBEDDINGS.md)
+Детальна документація: [GEMINI_EMBEDDINGS.md](../models/gemini/GEMINI_EMBEDDINGS.md)
 
 ---
 
