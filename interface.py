@@ -800,7 +800,7 @@ def create_gradio_interface() -> gr.Blocks:
                         label="Модель аналізу",
                         scale=1
                     )
-                with gr.Accordion("⚙️ Налаштування аналізу", open=False):
+                with gr.Accordion("⚙️ Налаштування аналізу", open=False) as analysis_thinking_accordion:
                     with gr.Row():
                         analysis_temp_slider = gr.Slider(
                             minimum=0.0,
@@ -815,6 +815,38 @@ def create_gradio_interface() -> gr.Blocks:
                             value=4000,
                             step=512,
                             label="Max Tokens (ліміт відповіді)"
+                        )
+                    analysis_thinking_enabled_checkbox = gr.Checkbox(
+                        label="Увімкнути режим Thinking (глибокий аналіз)",
+                        value=False,
+                        info="Активує розширений ланцюг міркувань (Gemini 3+, Claude 4.5/4.6)"
+                    )
+                    with gr.Row():
+                        analysis_thinking_type_dropdown = gr.Dropdown(
+                            choices=["Adaptive", "Enabled"],
+                            value="Adaptive",
+                            label="Тип Thinking (Claude)",
+                            interactive=False
+                        )
+                        analysis_thinking_level_dropdown = gr.Dropdown(
+                            choices=["none", "low", "medium", "high", "xhigh"],
+                            value="medium",
+                            label="Рівень Thinking (OpenAI/Gemini)",
+                            interactive=False
+                        )
+                        analysis_openai_verbosity_dropdown = gr.Dropdown(
+                            choices=["low", "medium", "high"],
+                            value="medium",
+                            label="Verbosity (OpenAI GPT-5)",
+                            interactive=True
+                        )
+                        analysis_thinking_budget_slider = gr.Slider(
+                            minimum=1024,
+                            maximum=32000,
+                            value=10000,
+                            step=1024,
+                            label="Бюджет токенів (Claude 4.5)",
+                            interactive=False
                         )
 
                 question_input = gr.Textbox(
@@ -1099,6 +1131,19 @@ def create_gradio_interface() -> gr.Blocks:
             outputs=[batch_thinking_type_dropdown, batch_thinking_level_dropdown, batch_thinking_budget_slider]
         )
 
+        # thinking mode settings — Analysis tab
+        analysis_provider_dropdown.change(
+            fn=update_thinking_visibility,
+            inputs=[analysis_provider_dropdown],
+            outputs=[analysis_thinking_accordion]
+        )
+
+        analysis_thinking_enabled_checkbox.change(
+            fn=update_thinking_level_interactive,
+            inputs=[analysis_thinking_enabled_checkbox],
+            outputs=[analysis_thinking_type_dropdown, analysis_thinking_level_dropdown, analysis_thinking_budget_slider]
+        )
+
         # generation and analysis
         generate_position_button.click(
             fn=lambda: (
@@ -1154,6 +1199,13 @@ def create_gradio_interface() -> gr.Blocks:
         )
 
         analyze_button.click(
+            fn=lambda: (
+                gr.update(value="⏳ **Аналіз правових позицій...**\n\nЗапит відправлено до AI. Зачекайте, це може зайняти кілька хвилин."),
+                gr.update(interactive=False)
+            ),
+            inputs=None,
+            outputs=[analysis_output, analyze_button]
+        ).then(
             fn=analyze_action,
             inputs=[
                 state_lp_json,
@@ -1162,9 +1214,18 @@ def create_gradio_interface() -> gr.Blocks:
                 analysis_provider_dropdown,
                 analysis_model_dropdown,
                 analysis_temp_slider,
-                analysis_max_tokens_slider
+                analysis_max_tokens_slider,
+                analysis_thinking_enabled_checkbox,
+                analysis_thinking_type_dropdown,
+                analysis_thinking_level_dropdown,
+                analysis_openai_verbosity_dropdown,
+                analysis_thinking_budget_slider
             ],
             outputs=analysis_output
+        ).then(
+            fn=lambda: gr.update(interactive=True),
+            inputs=None,
+            outputs=[analyze_button]
         )
 
         # Settings tab event handlers

@@ -64,15 +64,15 @@ python_version: "3.11"
 ## 🎯 Підтримка AI провайдерів
 
 ### Для генерації:
-- **OpenAI**: GPT-5.2 (NEW! з reasoning), GPT-4.1, GPT-4o, custom fine-tuned models
-- **Anthropic**: Claude 4.5 Sonnet (з підтримкою Extended Thinking)
-- **Google**: Gemini 3.0 Flash, 3.5 Flash (з підтримкою Thinking Mode)
+- **OpenAI**: GPT-5.4, GPT-5.3 Chat Latest, GPT-5.2 (NEW! з reasoning), GPT-4o Mini Fine-Tuned (кастомні моделі)
+- **Anthropic**: Claude Opus 4.6, Claude Sonnet 4.6 (з підтримкою Extended Thinking), Claude Haiku 4.5
+- **Google**: Gemini 3 Flash, Gemini 3 Pro (з підтримкою Thinking Mode)
 - **DeepSeek**: DeepSeek Chat
 
 ### Для аналізу:
-- **OpenAI**: GPT-5.2 (NEW! з reasoning), GPT-4.1, GPT-4o
-- **Anthropic**: Claude 4.5 Sonnet
-- **Google**: Gemini 3.0 Flash, 3.5 Flash
+- **OpenAI**: GPT-5.4, GPT-5.3 Chat Latest, GPT-5.2 (NEW! з reasoning)
+- **Anthropic**: Claude Opus 4.6, Claude Sonnet 4.6 (з підтримкою Extended Thinking), Claude Haiku 4.5
+- **Google**: Gemini 3 Flash, Gemini 3 Pro (з підтримкою Thinking Mode)
 - **DeepSeek**: DeepSeek Chat
 
 ### 🆕 GPT-5.2 - Нова модель з reasoning!

@@ -337,7 +337,8 @@ class LLMAnalyzer:
 
     def __init__(self, provider: Any, model_name: Any, temperature: float = GENERATION_TEMPERATURE,
                  max_tokens: Optional[int] = None, thinking_enabled: bool = False,
-                 thinking_level: str = "medium", openai_verbosity: str = "medium"):
+                 thinking_level: str = "medium", openai_verbosity: str = "medium",
+                 thinking_type: str = "Adaptive", thinking_budget: int = 10000):
         self.provider = provider
         self.model_name = model_name
         self.temperature = temperature
@@ -345,6 +346,8 @@ class LLMAnalyzer:
         self.thinking_enabled = thinking_enabled
         self.thinking_level = thinking_level
         self.openai_verbosity = openai_verbosity
+        self.thinking_type = thinking_type
+        self.thinking_budget = thinking_budget
 
         if provider == ModelProvider.OPENAI:
             if not OPENAI_API_KEY:
@@ -513,14 +516,46 @@ class LLMAnalyzer:
         """Analyze text using Anthropic."""
         try:
             _log_prompt("anthropic-analyzer", str(self.model_name), SYSTEM_PROMPT, prompt)
-            response = self.client.messages.create(
-                model=self.model_name,
-                max_tokens=self.max_tokens or MAX_TOKENS_ANALYSIS,
-                temperature=self.temperature,
-                system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": prompt}]
-            )
-            response_text = response.content[0].text
+            
+            message_params = {
+                "model": self.model_name,
+                "max_tokens": self.max_tokens or MAX_TOKENS_ANALYSIS,
+                "temperature": self.temperature,
+                "system": [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+                "messages": [{"role": "user", "content": prompt}]
+            }
+
+            if self.thinking_enabled and "claude" in str(self.model_name).lower():
+                if self.thinking_type.lower() == "adaptive" and "-4-6" in str(self.model_name).lower():
+                    message_params["thinking"] = {"type": "adaptive"}
+                    message_params["temperature"] = 1.0
+                    
+                    t_lv = self.thinking_level.lower()
+                    if t_lv == "xhigh":
+                        effort = "max"
+                    elif t_lv in ["low", "medium", "high"]:
+                        effort = t_lv
+                    else:
+                        effort = "medium"
+                    message_params["output_config"] = {"effort": effort}
+                else:
+                    budget = max(1024, int(self.thinking_budget))
+                    if message_params["max_tokens"] <= budget:
+                        message_params["max_tokens"] = budget + 4000
+                    message_params["thinking"] = {
+                        "type": "enabled",
+                        "budget_tokens": budget
+                    }
+                    message_params["temperature"] = 1.0
+
+            response = self.client.messages.create(**message_params)
+            
+            response_text = ""
+            for block in response.content:
+                if hasattr(block, 'type') and block.type == 'text':
+                    response_text += getattr(block, 'text', '')
+                elif hasattr(block, 'text'):
+                    response_text += block.text
             
             # Extract JSON from potential markdown blocks
             json_data = extract_json_from_text(response_text)
@@ -562,13 +597,20 @@ class LLMAnalyzer:
                 ),
             ]
             
-            generate_content_config = types.GenerateContentConfig(
-                temperature=self.temperature,
-                max_output_tokens=self.max_tokens or MAX_TOKENS_ANALYSIS,
-                system_instruction=[
+            config_params = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens or MAX_TOKENS_ANALYSIS,
+                "system_instruction": [
                     types.Part.from_text(text=SYSTEM_PROMPT),
                 ],
-            )
+            }
+
+            if self.thinking_enabled and str(self.model_name).startswith("gemini-3"):
+                config_params["thinking_config"] = types.ThinkingConfig(
+                    thinking_level=self.thinking_level.upper()
+                )
+
+            generate_content_config = types.GenerateContentConfig(**config_params)
 
             response = self.client.models.generate_content(
                 model=self.model_name,
@@ -624,13 +666,16 @@ class PrecedentAnalysisWorkflow(Workflow):
                  max_tokens: Optional[int] = None,
                  thinking_enabled: bool = False,
                  thinking_level: str = "medium",
-                 openai_verbosity: str = "medium"):
+                 openai_verbosity: str = "medium",
+                 thinking_type: str = "Adaptive",
+                 thinking_budget: int = 10000):
         super().__init__()
         # Use default analysis model if not specified
         if model_name is None:
             model_name = DEFAULT_ANALYSIS_MODEL or AnalysisModelName.GPT5_2
         self.analyzer = LLMAnalyzer(provider, model_name, temperature, max_tokens,
-                                    thinking_enabled, thinking_level, openai_verbosity)
+                                    thinking_enabled, thinking_level, openai_verbosity,
+                                    thinking_type, thinking_budget)
 
     @step
     async def analyze(self, ctx: Context, ev: StartEvent) -> StopEvent:
@@ -1345,8 +1390,10 @@ async def analyze_action(
         temperature: float = GENERATION_TEMPERATURE,
         max_tokens: Optional[int] = None,
         thinking_enabled: bool = False,
+        thinking_type: str = "Adaptive",
         thinking_level: str = "medium",
-        openai_verbosity: str = "medium"
+        openai_verbosity: str = "medium",
+        thinking_budget: int = 10000
 ) -> str:
     """Analyze search results using AI."""
     try:
@@ -1356,8 +1403,10 @@ async def analyze_action(
             temperature=temperature,
             max_tokens=max_tokens,
             thinking_enabled=thinking_enabled,
+            thinking_type=thinking_type,
             thinking_level=thinking_level,
-            openai_verbosity=openai_verbosity
+            openai_verbosity=openai_verbosity,
+            thinking_budget=thinking_budget
         )
 
         query = (
