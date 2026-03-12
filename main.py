@@ -1,4 +1,5 @@
 import os
+import gradio as gr
 import sys
 import json
 import time
@@ -1500,10 +1501,12 @@ async def analyze_action(
         thinking_type: str = "Adaptive",
         thinking_level: str = "medium",
         openai_verbosity: str = "medium",
-        thinking_budget: int = 10000
+        thinking_budget: int = 10000,
+        progress=gr.Progress()
 ) -> str:
     """Analyze search results using AI."""
     try:
+        progress(0, desc="Ініціалізація аналізу...")
         workflow = PrecedentAnalysisWorkflow(
             provider=ModelProvider(provider),
             model_name=AnalysisModelName(model_name),
@@ -1516,6 +1519,7 @@ async def analyze_action(
             thinking_budget=thinking_budget
         )
 
+        progress(0.2, desc="Підготовка даних...")
         query = (
             f"{legal_position_json['title']}: "
             f"{legal_position_json['text']}: "
@@ -1523,17 +1527,22 @@ async def analyze_action(
             f"{legal_position_json['category']}"
         )
 
+        progress(0.4, desc="Запит до AI (це може зайняти час)...")
         response_text = await workflow.run(
             query=query,
             question=question,
             nodes=nodes
         )
 
+        progress(0.8, desc="Формування висновків...")
         output = f"**Аналіз ШІ (модель: {model_name}):**\n{response_text}\n\n"
         output += "**Наявні в базі правові позицій Верховного Суду:**\n\n"
 
         analysis_lines = response_text.split('\n')
-        for line in analysis_lines:
+        total_lines = len(analysis_lines)
+        for i, line in enumerate(analysis_lines):
+            if i % 2 == 0:
+                progress(0.8 + (0.2 * i / total_lines), desc=f"Обробка результатів ({i}/{total_lines})...")
             if line.startswith('* ['):
                 index = line[3:line.index(']')]
                 node = nodes[int(index) - 1]

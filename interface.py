@@ -867,62 +867,8 @@ def create_gradio_interface() -> gr.Blocks:
                 )
 
             # Вкладка Налаштування (Settings)
-            with gr.Tab("⚙️ Налаштування", id=3):
-                gr.Markdown("### Редагування промптів", elem_classes=["tab-header"])
-
-                gr.Markdown("""
-                **Увага!** Налаштування промптів зберігаються тільки для вашої поточної сесії.
-                Кожен користувач має свої власні налаштування, які не впливають на інших користувачів.
-                """)
-
-                with gr.Column():
-                    system_prompt_editor = gr.Textbox(
-                        label="📋 Системний промпт",
-                        value=SYSTEM_PROMPT,
-                        lines=5,
-                        max_lines=10,
-                        placeholder="Введіть системний промпт...",
-                        info="Визначає роль та базові інструкції для AI"
-                    )
-
-                    lp_prompt_editor = gr.Textbox(
-                        label="⚖️ Промпт генерації правової позиції",
-                        value=LEGAL_POSITION_PROMPT,
-                        lines=15,
-                        max_lines=30,
-                        placeholder="Введіть промпт для генерації правової позиції...",
-                        info="Шаблон для генерації правової позиції з судового рішення"
-                    )
-
-                    analysis_prompt_editor = gr.Textbox(
-                        label="🔍 Промпт аналізу прецедентів",
-                        value=str(PRECEDENT_ANALYSIS_TEMPLATE.template),
-                        lines=15,
-                        max_lines=30,
-                        placeholder="Введіть промпт для аналізу прецедентів...",
-                        info="Шаблон для порівняльного аналізу правових позицій"
-                    )
-
-                with gr.Row():
-                    save_prompts_button = gr.Button(
-                        "💾 Зберегти промпти",
-                        variant="primary",
-                        scale=1,
-                        interactive=False
-                    )
-                    reset_prompts_button = gr.Button(
-                        "🔄 Скинути до стандартних",
-                        variant="secondary",
-                        scale=1
-                    )
-
-                prompts_status = gr.Markdown(
-                    "",
-                    elem_classes=["tab-content"]
-                )
-
             # Вкладка Пакетне тестування (Batch Testing)
-            with gr.Tab("📊 Пакетне тестування", id=4):
+            with gr.Tab("📊 Пакетне тестування", id=3):
                 gr.Markdown("### Пакетна генерація правових позицій з CSV/Excel файлу", elem_classes=["tab-header"])
 
                 gr.Markdown("""
@@ -1053,6 +999,61 @@ def create_gradio_interface() -> gr.Blocks:
                     label="⬇️ Вигрузити результати",
                     variant="secondary",
                     visible=False
+                )
+
+            # Вкладка Налаштування (Settings)
+            with gr.Tab("⚙️ Налаштування", id=4):
+                gr.Markdown("### Редагування промптів", elem_classes=["tab-header"])
+
+                gr.Markdown("""
+                **Увага!** Налаштування промптів зберігаються тільки для вашої поточної сесії.
+                Кожен користувач має свої власні налаштування, які не впливають на інших користувачів.
+                """)
+
+                with gr.Column():
+                    system_prompt_editor = gr.Textbox(
+                        label="📋 Системний промпт",
+                        value=SYSTEM_PROMPT,
+                        lines=5,
+                        max_lines=10,
+                        placeholder="Введіть системний промпт...",
+                        info="Визначає роль та базові інструкції для AI"
+                    )
+
+                    lp_prompt_editor = gr.Textbox(
+                        label="⚖️ Промпт генерації правової позиції",
+                        value=LEGAL_POSITION_PROMPT,
+                        lines=15,
+                        max_lines=30,
+                        placeholder="Введіть промпт для генерації правової позиції...",
+                        info="Шаблон для генерації правової позиції з судового рішення"
+                    )
+
+                    analysis_prompt_editor = gr.Textbox(
+                        label="🔍 Промпт аналізу прецедентів",
+                        value=str(PRECEDENT_ANALYSIS_TEMPLATE.template),
+                        lines=15,
+                        max_lines=30,
+                        placeholder="Введіть промпт для аналізу прецедентів...",
+                        info="Шаблон для порівняльного аналізу правових позицій"
+                    )
+
+                with gr.Row():
+                    save_prompts_button = gr.Button(
+                        "💾 Зберегти промпти",
+                        variant="primary",
+                        scale=1,
+                        interactive=False
+                    )
+                    reset_prompts_button = gr.Button(
+                        "🔄 Скинути до стандартних",
+                        variant="secondary",
+                        scale=1
+                    )
+
+                prompts_status = gr.Markdown(
+                    "",
+                    elem_classes=["tab-content"]
                 )
 
             # Вкладка Допомога (Help)
