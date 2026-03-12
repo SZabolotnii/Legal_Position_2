@@ -111,6 +111,71 @@ def _build_openai_reasoning_params(
     return params
 # ============ End OpenAI Reasoning Helpers ============
 
+# ============ Prompt Assembly Helpers ============
+_DYNAMIC_PLACEHOLDERS = ("{court_decision_text}", "{comment}")
+_DEFAULT_COMMENT_TEXT = "Коментар відсутній"
+
+
+def _ensure_dynamic_placeholders(lp_prompt: str) -> str:
+    """Ensure dynamic placeholders exist in the legal-position prompt."""
+    updated = lp_prompt
+    if "{court_decision_text}" not in updated:
+        print("[WARNING] {court_decision_text} placeholder missing in prompt! Appending to the end.")
+        updated += "\n\n<court_decision>\n{court_decision_text}\n</court_decision>"
+    if "{comment}" not in updated:
+        updated += "\n\n<comment>\n{comment}\n</comment>"
+    return updated
+
+
+def _split_legal_position_prompt(lp_prompt: str) -> Tuple[str, str]:
+    """Split prompt into static prefix and dynamic suffix starting from first placeholder."""
+    positions = [lp_prompt.find(p) for p in _DYNAMIC_PLACEHOLDERS if p in lp_prompt]
+    if not positions:
+        return lp_prompt.strip(), ""
+
+    split_at = min(positions)
+    static_part = lp_prompt[:split_at].strip()
+    dynamic_part = lp_prompt[split_at:].strip()
+    return static_part, dynamic_part
+
+
+def _compile_generation_prompt_blocks(
+    system_prompt: str,
+    lp_prompt: str,
+    court_decision_text: str,
+    comment: str,
+) -> Dict[str, str]:
+    """Compile provider-ready prompt blocks without changing UI-facing prompt settings."""
+    prepared_lp_prompt = _ensure_dynamic_placeholders(lp_prompt)
+    static_lp, dynamic_lp = _split_legal_position_prompt(prepared_lp_prompt)
+
+    if not dynamic_lp:
+        dynamic_lp = "<court_decision>\n{court_decision_text}\n</court_decision>\n\n<comment>\n{comment}\n</comment>"
+
+    final_comment = comment if comment else _DEFAULT_COMMENT_TEXT
+    dynamic_payload = dynamic_lp.format(
+        court_decision_text=court_decision_text,
+        comment=final_comment,
+    )
+
+    merged_system_prompt = system_prompt.strip()
+    if static_lp:
+        merged_system_prompt = f"{merged_system_prompt}\n\n{static_lp}" if merged_system_prompt else static_lp
+
+    full_user_prompt = prepared_lp_prompt.format(
+        court_decision_text=court_decision_text,
+        comment=final_comment,
+    )
+
+    return {
+        "system_prompt": merged_system_prompt,
+        "user_prompt": dynamic_payload,
+        "full_user_prompt": full_user_prompt,
+        "static_prompt": static_lp,
+        "dynamic_template": dynamic_lp,
+    }
+# ============ End Prompt Assembly Helpers ============
+
 # Initialize embedding model and settings BEFORE importing components
 # Priority: OpenAI > Gemini > None
 embed_model = None
@@ -815,25 +880,25 @@ def generate_legal_position(
         print(f"[DEBUG] FINAL court_decision_text preview: {court_decision_text[:300]}")
         print(f"[DEBUG] comment_input: {comment_input[:100] if comment_input else 'Empty'}")
 
-        # Check if placeholders exist in the prompt, if not - append them to the end
-        if "{court_decision_text}" not in lp_prompt:
-            print("[WARNING] {court_decision_text} placeholder missing in prompt! Appending to the end.")
-            lp_prompt += "\n\n<court_decision>\n{court_decision_text}\n</court_decision>"
-        
-        if "{comment}" not in lp_prompt:
-            lp_prompt += "\n\n<comment>\n{comment}\n</comment>"
-
-        content = lp_prompt.format(
+        prompt_blocks = _compile_generation_prompt_blocks(
+            system_prompt=system_prompt,
+            lp_prompt=lp_prompt,
             court_decision_text=court_decision_text,
-            comment=comment_input if comment_input else "Коментар відсутній"
+            comment=comment_input,
         )
+        compiled_system_prompt = prompt_blocks["system_prompt"]
+        content = prompt_blocks["full_user_prompt"]
+        provider_user_content = prompt_blocks["user_prompt"]
 
         # Debug: Check formatted content
-        print(f"[DEBUG] ===== UNIFIED PROMPT FOR ALL PROVIDERS =====")
-        print(f"[DEBUG] Formatted content length: {len(content)}")
-        print(f"[DEBUG] Content preview (first 500 chars): {content[:500]}")
+        print(f"[DEBUG] ===== COMPILED PROMPT BLOCKS =====")
+        print(f"[DEBUG] Static system length: {len(compiled_system_prompt)}")
+        print(f"[DEBUG] Dynamic user length: {len(provider_user_content)}")
+        print(f"[DEBUG] Full content length: {len(content)}")
+        print(f"[DEBUG] Static system preview (first 500 chars): {compiled_system_prompt[:500]}")
+        print(f"[DEBUG] Dynamic user preview (first 500 chars): {provider_user_content[:500]}")
         print(f"[DEBUG] Provider: {provider}, Model: {model_name}")
-        print(f"[DEBUG] ==============================================")
+        print(f"[DEBUG] ==================================")
 
         # Validation check - ensure court_decision_text is not empty
         if not court_decision_text or len(court_decision_text.strip()) < 50:
@@ -872,8 +937,8 @@ def generate_legal_position(
                 role = "developer" if is_reasoning_model else "system"
                 
                 messages = [
-                    {"role": role, "content": system_prompt},
-                    {"role": "user", "content": content},
+                    {"role": role, "content": compiled_system_prompt},
+                    {"role": "user", "content": provider_user_content},
                 ]
                 
                 # Parameters for chat completion
@@ -896,7 +961,7 @@ def generate_legal_position(
                     )
 
                 # Log full prompts in debug mode
-                _log_prompt("openai", model_name, system_prompt, content)
+                _log_prompt("openai", model_name, compiled_system_prompt, provider_user_content)
 
                 # Execute with retries
                 for attempt in range(max_retries):
@@ -1054,20 +1119,21 @@ def generate_legal_position(
             client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
             # Debug: check what we're sending to Anthropic
-            print(f"[DEBUG] Sending to Anthropic - content length: {len(content)}")
-            print(f"[DEBUG] Content preview: {content[:500]}")
+            print(f"[DEBUG] Sending to Anthropic - system length: {len(compiled_system_prompt)}")
+            print(f"[DEBUG] Sending to Anthropic - dynamic user length: {len(provider_user_content)}")
+            print(f"[DEBUG] Anthropic dynamic preview: {provider_user_content[:500]}")
             print(f"[DEBUG] Anthropic API key configured: {bool(ANTHROPIC_API_KEY)}")
 
             messages = [{
                 "role": "user",
-                "content": content
+                "content": provider_user_content
             }]
 
             # Prepare message creation parameters
             message_params = {
                 "model": model_name,
                 "max_tokens": max_tokens or MAX_TOKENS_CONFIG["anthropic"],
-                "system": [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
+                "system": [{"type": "text", "text": compiled_system_prompt, "cache_control": {"type": "ephemeral"}}],
                 "messages": messages,
                 "temperature": temperature
             }
@@ -1106,7 +1172,7 @@ def generate_legal_position(
                     message_params["temperature"] = 1.0
 
             # Log full prompts in debug mode
-            _log_prompt("anthropic", model_name, system_prompt, content)
+            _log_prompt("anthropic", model_name, compiled_system_prompt, provider_user_content)
 
             # Retry logic for connection errors
             max_retries = 3
