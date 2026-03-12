@@ -112,11 +112,48 @@ def _build_openai_reasoning_params(
 # ============ End OpenAI Reasoning Helpers ============
 
 # ============ Prompt Assembly Helpers ============
-_DYNAMIC_PLACEHOLDERS = ("{court_decision_text}", "{comment}")
+_GENERATION_DYNAMIC_PLACEHOLDERS = ("{court_decision_text}", "{comment}")
+_ANALYSIS_DYNAMIC_TAGS = ("<new_decision>", "<clarifying_question>", "<legal_positions>")
 _DEFAULT_COMMENT_TEXT = "Коментар відсутній"
 
 
-def _ensure_dynamic_placeholders(lp_prompt: str) -> str:
+def _split_prompt_by_placeholders(prompt_text: str, placeholders: Tuple[str, ...]) -> Tuple[str, str]:
+    """Split prompt into static prefix and dynamic suffix starting from first dynamic placeholder."""
+    positions = [prompt_text.find(p) for p in placeholders if p in prompt_text]
+    if not positions:
+        return prompt_text.strip(), ""
+
+    split_at = min(positions)
+    static_part = prompt_text[:split_at].strip()
+    dynamic_part = prompt_text[split_at:].strip()
+    return static_part, dynamic_part
+
+
+def _compile_prompt_blocks(
+    system_prompt: str,
+    prompt_template: str,
+    format_values: Dict[str, str],
+    placeholders: Tuple[str, ...],
+) -> Dict[str, str]:
+    """Compile provider-ready prompt blocks without changing UI-facing prompt settings."""
+    static_part, dynamic_part = _split_prompt_by_placeholders(prompt_template, placeholders)
+    merged_system_prompt = system_prompt.strip()
+    if static_part:
+        merged_system_prompt = f"{merged_system_prompt}\n\n{static_part}" if merged_system_prompt else static_part
+
+    full_user_prompt = prompt_template.format(**format_values)
+    dynamic_payload = dynamic_part.format(**format_values) if dynamic_part else full_user_prompt
+
+    return {
+        "system_prompt": merged_system_prompt,
+        "user_prompt": dynamic_payload,
+        "full_user_prompt": full_user_prompt,
+        "static_prompt": static_part,
+        "dynamic_template": dynamic_part,
+    }
+
+
+def _ensure_generation_placeholders(lp_prompt: str) -> str:
     """Ensure dynamic placeholders exist in the legal-position prompt."""
     updated = lp_prompt
     if "{court_decision_text}" not in updated:
@@ -127,52 +164,42 @@ def _ensure_dynamic_placeholders(lp_prompt: str) -> str:
     return updated
 
 
-def _split_legal_position_prompt(lp_prompt: str) -> Tuple[str, str]:
-    """Split prompt into static prefix and dynamic suffix starting from first placeholder."""
-    positions = [lp_prompt.find(p) for p in _DYNAMIC_PLACEHOLDERS if p in lp_prompt]
-    if not positions:
-        return lp_prompt.strip(), ""
-
-    split_at = min(positions)
-    static_part = lp_prompt[:split_at].strip()
-    dynamic_part = lp_prompt[split_at:].strip()
-    return static_part, dynamic_part
-
-
 def _compile_generation_prompt_blocks(
     system_prompt: str,
     lp_prompt: str,
     court_decision_text: str,
     comment: str,
 ) -> Dict[str, str]:
-    """Compile provider-ready prompt blocks without changing UI-facing prompt settings."""
-    prepared_lp_prompt = _ensure_dynamic_placeholders(lp_prompt)
-    static_lp, dynamic_lp = _split_legal_position_prompt(prepared_lp_prompt)
-
-    if not dynamic_lp:
-        dynamic_lp = "<court_decision>\n{court_decision_text}\n</court_decision>\n\n<comment>\n{comment}\n</comment>"
-
+    """Compile provider-ready prompt blocks for legal position generation."""
+    prepared_lp_prompt = _ensure_generation_placeholders(lp_prompt)
     final_comment = comment if comment else _DEFAULT_COMMENT_TEXT
-    dynamic_payload = dynamic_lp.format(
-        court_decision_text=court_decision_text,
-        comment=final_comment,
+    return _compile_prompt_blocks(
+        system_prompt=system_prompt,
+        prompt_template=prepared_lp_prompt,
+        format_values={
+            "court_decision_text": court_decision_text,
+            "comment": final_comment,
+        },
+        placeholders=_GENERATION_DYNAMIC_PLACEHOLDERS,
     )
 
+
+def _compile_analysis_prompt_blocks(
+    system_prompt: str,
+    full_prompt: str,
+) -> Dict[str, str]:
+    """Compile provider-ready prompt blocks for precedent analysis from the already formatted prompt."""
+    static_part, dynamic_part = _split_prompt_by_placeholders(full_prompt, _ANALYSIS_DYNAMIC_TAGS)
     merged_system_prompt = system_prompt.strip()
-    if static_lp:
-        merged_system_prompt = f"{merged_system_prompt}\n\n{static_lp}" if merged_system_prompt else static_lp
-
-    full_user_prompt = prepared_lp_prompt.format(
-        court_decision_text=court_decision_text,
-        comment=final_comment,
-    )
+    if static_part:
+        merged_system_prompt = f"{merged_system_prompt}\n\n{static_part}" if merged_system_prompt else static_part
 
     return {
         "system_prompt": merged_system_prompt,
-        "user_prompt": dynamic_payload,
-        "full_user_prompt": full_user_prompt,
-        "static_prompt": static_lp,
-        "dynamic_template": dynamic_lp,
+        "user_prompt": dynamic_part if dynamic_part else full_prompt,
+        "full_user_prompt": full_prompt,
+        "static_prompt": static_part,
+        "dynamic_template": dynamic_part,
     }
 # ============ End Prompt Assembly Helpers ============
 
@@ -454,13 +481,20 @@ class LLMAnalyzer:
         # Determine model name and if it's a reasoning model
         model_val = self.model_name.value if hasattr(self.model_name, "value") else str(self.model_name)
         is_reasoning_model = any(m in model_val.lower() for m in ["gpt-4.1", "gpt-4.5", "gpt-5", "o1", "o3"])
-        
+
+        analysis_blocks = _compile_analysis_prompt_blocks(
+            system_prompt=SYSTEM_PROMPT,
+            full_prompt=prompt,
+        )
+        compiled_system_prompt = analysis_blocks["system_prompt"]
+        final_user_prompt = analysis_blocks["user_prompt"]
+
         # Use developer role for newer models
         role = "developer" if is_reasoning_model else "system"
-        
+
         messages = [
-            ChatMessage(role=role, content=SYSTEM_PROMPT),
-            ChatMessage(role="user", content=prompt)
+            ChatMessage(role=role, content=compiled_system_prompt),
+            ChatMessage(role="user", content=final_user_prompt)
         ]
 
         response_format = {
@@ -489,7 +523,7 @@ class LLMAnalyzer:
                 )
 
             # Log full prompts in debug mode
-            _log_prompt("openai-analyzer", model_val, SYSTEM_PROMPT, prompt)
+            _log_prompt("openai-analyzer", model_val, compiled_system_prompt, final_user_prompt)
 
             # Retry logic for OpenAI analysis
             max_retries = 3
@@ -580,14 +614,21 @@ class LLMAnalyzer:
     async def _analyze_with_anthropic(self, prompt: str, response_schema: dict) -> str:
         """Analyze text using Anthropic."""
         try:
-            _log_prompt("anthropic-analyzer", str(self.model_name), SYSTEM_PROMPT, prompt)
+            analysis_blocks = _compile_analysis_prompt_blocks(
+                system_prompt=SYSTEM_PROMPT,
+                full_prompt=prompt,
+            )
+            compiled_system_prompt = analysis_blocks["system_prompt"]
+            final_user_prompt = analysis_blocks["user_prompt"]
+
+            _log_prompt("anthropic-analyzer", str(self.model_name), compiled_system_prompt, final_user_prompt)
             
             message_params = {
                 "model": self.model_name,
                 "max_tokens": self.max_tokens or MAX_TOKENS_ANALYSIS,
                 "temperature": self.temperature,
-                "system": [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
-                "messages": [{"role": "user", "content": prompt}]
+                "system": [{"type": "text", "text": compiled_system_prompt, "cache_control": {"type": "ephemeral"}}],
+                "messages": [{"role": "user", "content": final_user_prompt}]
             }
 
             if self.thinking_enabled and "claude" in str(self.model_name).lower():
