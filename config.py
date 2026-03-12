@@ -1,7 +1,10 @@
+import logging
 import os
 from enum import Enum
 from pathlib import Path
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -12,19 +15,6 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-
-# Debug: Print key status (masked)
-print("="*30)
-print("🔧 CONFIGURATION DEBUG")
-print(f"OPENAI_API_KEY: {'✅ Found' if OPENAI_API_KEY else '❌ Missing'}")
-if OPENAI_API_KEY:
-    print(f"  Length: {len(OPENAI_API_KEY)}")
-    print(f"  Prefix: {OPENAI_API_KEY[:5]}...")
-
-print(f"ANTHROPIC_API_KEY: {'✅ Found' if ANTHROPIC_API_KEY else '❌ Missing'}")
-print(f"DEEPSEEK_API_KEY: {'✅ Found' if DEEPSEEK_API_KEY else '❌ Missing'}")
-print(f"GEMINI_API_KEY: {'✅ Found' if os.getenv('GEMINI_API_KEY') else '❌ Missing'}")
-print("="*30)
 
 # Конфігурація Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")

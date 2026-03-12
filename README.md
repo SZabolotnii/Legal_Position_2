@@ -33,17 +33,19 @@ python_version: "3.11"
 - Можливість додавання коментарів для уточнення контексту
 - Автоматична класифікація за типом судочинства та категорією
 
-### 🔍 Пошук схожих позицій
+### 🔍 Пошук схожих позицій *(опціонально)*
 - Інтелектуальний пошук релевантних правових позицій у базі даних
 - Пошук на основі згенерованої позиції або вхідного тексту
 - Гібридний підхід: векторний пошук + BM25
 - Відображення результатів з посиланнями на джерела
+- Якщо customer build поставляється без retrieval-інфраструктури, цей модуль може бути вимкнений
 
-### ⚖️ Порівняльний аналіз
+### ⚖️ Порівняльний аналіз *(опціонально)*
 - Детальний аналіз релевантності знайдених позицій
 - Виявлення спільних правових аспектів
 - Оцінка можливості застосування існуючих позицій
 - Обґрунтовані висновки щодо необхідності створення нової позиції
+- Не є критерієм приймання MVP, якщо це не зафіксовано окремо в ТЗ
 
 ### ⚙️ Редагування промптів
 - Персональне налаштування промптів для AI
@@ -153,8 +155,10 @@ REDIS_PASSWORD=your_redis_password
 
 ### 4. Запуск додатку
 
+Локальний запуск:
+
 ```bash
-python main.py
+python app.py
 ```
 
 Додаток буде доступний за адресою: `http://localhost:7860`
@@ -320,6 +324,12 @@ redis:
 
 ## 🚀 Deployment
 
+### Deployment profiles
+
+- **Customer MVP / handoff:** Generation + model/thinking/comment controls are the primary supported flow.
+- **Optional modules:** Search and comparative analysis may be enabled only when retrieval indexes are available and accepted as in-scope.
+- **Known limitation:** if retrieval uses `DocSA/legal-position-indexes`, that corpus is an older snapshot and may be stale.
+
 ### Hugging Face Spaces
 
 1. Створіть новий Space на [Hugging Face](https://huggingface.co/spaces)
@@ -443,4 +453,4 @@ gunicorn main:app --workers 4 --bind 0.0.0.0:7860
 
 **Останнє оновлення:** 2026-01-03
 
-**Статус:** ✅ Production Ready
+**Статус:** 🟡 Handoff Candidate (generation-first MVP; optional retrieval modules require separate validation)

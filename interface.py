@@ -730,8 +730,8 @@ def create_gradio_interface() -> gr.Blocks:
                         
                     with gr.TabItem("📂 Завантаження файлу", id="file_tab"):
                         file_input = gr.File(
-                            label="Перетягніть файл або натисніть для вибору",
-                            file_types=[".txt", ".docx", ".pdf"], # Added docx/pdf just for UI (backend needs support)
+                            label="Перетягніть TXT-файл або натисніть для вибору",
+                            file_types=[".txt"],
                             file_count="single"
                         )
                 
@@ -752,7 +752,7 @@ def create_gradio_interface() -> gr.Blocks:
                     )
                     
                     generate_position_button = gr.Button(
-                        "� Згенерувати правову позицію",
+                        "📝 Згенерувати правову позицію",
                         variant="primary",
                         size="lg"
                     )
