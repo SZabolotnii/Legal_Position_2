@@ -796,26 +796,13 @@ def generate_legal_position(
             raise Exception(f"Текст судового рішення занадто короткий або відсутній (довжина: {len(court_decision_text) if court_decision_text else 0} символів). Будь ласка, перевірте вхідні дані.")
 
         if provider == ModelProvider.OPENAI.value:
-            # Diagnostic: test raw httpx connection before using OpenAI SDK
             http_client = None
             response_text = None
             try:
                 print(f"[DEBUG] OpenAI pre-flight check...")
                 print(f"[DEBUG] openai SDK version: {openai.__version__}")
                 print(f"[DEBUG] httpx version: {httpx.__version__}")
-                print(f"[DEBUG] OPENAI_API_KEY length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
-                
-                # Quick raw httpx connectivity test to api.openai.com
-                try:
-                    with httpx.Client(timeout=10.0, http2=False) as test_client:
-                        test_resp = test_client.get("https://api.openai.com/v1/models",
-                                                     headers={"Authorization": f"Bearer {OPENAI_API_KEY[:20]}...truncated"})
-                        print(f"[DEBUG] Raw httpx test -> HTTP {test_resp.status_code}")
-                except Exception as pre_err:
-                    import traceback
-                    print(f"[WARNING] Raw httpx pre-flight failed: {type(pre_err).__name__}: {pre_err}")
-                    print(f"[WARNING] Pre-flight traceback: {traceback.format_exc()}")
-                
+
                 http_client = httpx.Client(
                     timeout=httpx.Timeout(120.0, connect=30.0),
                     http2=False,
@@ -1024,7 +1011,7 @@ def generate_legal_position(
             # Debug: check what we're sending to Anthropic
             print(f"[DEBUG] Sending to Anthropic - content length: {len(content)}")
             print(f"[DEBUG] Content preview: {content[:500]}")
-            print(f"[DEBUG] ANTHROPIC_API_KEY set: {bool(ANTHROPIC_API_KEY)}, length: {len(ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else 0}")
+            print(f"[DEBUG] Anthropic API key configured: {bool(ANTHROPIC_API_KEY)}")
 
             messages = [{
                 "role": "user",
